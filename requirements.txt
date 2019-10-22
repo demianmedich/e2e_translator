@@ -3,4 +3,3 @@ numpy
 nltk
 gensim
 konlpy
-mecab-python3

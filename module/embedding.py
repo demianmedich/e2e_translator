@@ -47,7 +47,8 @@ class Word2VecEmbedding(WordEmbedding):
             # load from saved FastText embedding file
             self._impl = Word2Vec.load_word2vec_format(saved_model_path)
         else:
-            raise AssertionError('sentences or corpus_file_path should be given as not None')
+            raise AssertionError(
+                'sentences or corpus_file_path should be given as not None')
 
         self.vocab = self._impl.wv.index2word
         self.vocab_size = len(self.vocab)
@@ -84,7 +85,8 @@ class FastTextEmbedding(WordEmbedding):
             # load from saved FastText embedding file
             self._impl = FastText.load_fasttext_format(saved_model_path)
         else:
-            raise AssertionError('sentences or corpus_file_path should be given as not None')
+            raise AssertionError(
+                'sentences or corpus_file_path should be given as not None')
 
         self.vocab = self._impl.wv.index2word
         self.vocab_size = len(self.vocab)
