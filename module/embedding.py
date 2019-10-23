@@ -32,6 +32,7 @@ class WordEmbedding(metaclass=ABCMeta):
 class Word2VecEmbedding(WordEmbedding):
 
     def __init__(self,
+                 is_skip_gram=True,
                  sentences=None,
                  corpus_file_path: str = None,
                  dim: int = 100,
@@ -40,9 +41,9 @@ class Word2VecEmbedding(WordEmbedding):
         super().__init__()
 
         if sentences is not None:
-            self._impl = Word2Vec(size=dim, sentences=sentences)
+            self._impl = Word2Vec(sg=int(is_skip_gram), size=dim, sentences=sentences)
         elif corpus_file_path is not None:
-            self._impl = Word2Vec(size=dim, corpus_file=corpus_file_path)
+            self._impl = Word2Vec(sg=int(is_skip_gram), size=dim, corpus_file=corpus_file_path)
         elif saved_model_path is not None:
             # load from saved FastText embedding file
             self._impl = Word2Vec.load_word2vec_format(saved_model_path)
