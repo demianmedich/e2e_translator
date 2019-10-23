@@ -36,11 +36,19 @@ class GruEncoder(nn.Module):
                           self.hidden_size,
                           batch_first=True,
                           num_layers=self.num_layers,
-                          bidirectional=self.bidirectional)
+                          bidirectional=self.bidirectional,
+                          dropout=self.dropout_prob)
 
     def forward(self, x, seq_lengths):
         x = self.embedding_lookup(x)
-        # x = pack_padded_sequence(x, seq_lengths, )
+        packed_input = pack_padded_sequence(x, seq_lengths, batch_first=True)
+        init_hidden_state = torch.zeros(
+            self.num_layers * 2 if self.bidirectional else 1,
+            x.size(0),
+            self.hidden_size
+        )
+        _, hidden_state = self.rnn(packed_input, init_hidden_state)
+        return hidden_state
 
     def init_embedding_weight(self,
                               weight: np.ndarray):

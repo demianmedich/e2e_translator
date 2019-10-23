@@ -8,6 +8,8 @@ import torch
 from torch.utils import data
 
 from util.tokens import EOS_TOKEN
+from util.tokens import PAD_TOKEN
+from util.tokens import SPECIAL_TOKENS
 from util.tokens import UNK_TOKEN
 
 
@@ -67,18 +69,25 @@ class ParallelTextData(data.Dataset):
 
 
 def pad_tensor(sentence, max_len, pad_value=0):
-    """
-    append tensor to sentence
-    """
+    """Append padding to one sentence"""
     pad_size = max_len - len(sentence)
     for _ in range(pad_size):
         sentence.append(pad_value)
 
 
 def pad_tokenized_sequence(tokenized_sequence):
-    sequence_lengths = torch.tensor([len(sentence) for sentence in tokenized_sequence])
+    """
+    Append padding to several sentences
+
+    :param tokenized_sequence: sequence with several tokens
+    :return: padded_token_sequence, sequence_length excluding padding
+    """
+    sequence_lengths = torch.tensor(
+        [len(sentence) for sentence in tokenized_sequence])
     max_len = int(max(sequence_lengths).item())
-    [pad_tensor(sentence, max_len=max_len) for sentence in tokenized_sequence]
+    [pad_tensor(sentence, max_len=max_len,
+                pad_value=SPECIAL_TOKENS.index(PAD_TOKEN)) for sentence in
+     tokenized_sequence]
     padded_tokens = torch.tensor(tokenized_sequence)
     return padded_tokens, sequence_lengths
 
@@ -88,9 +97,12 @@ def collate_func(batch):
     Called whenever mini-batch decided.
     :returns src_seqs, src_seq_lengths, tgt_seqs, tgt_seq_lengths
     """
-    src_sequences, src_sequence_lengths = pad_tokenized_sequence([src for src, _ in batch])
-    tgt_sequences, tgt_sequence_lengths = pad_tokenized_sequence([tgt for _, tgt in batch])
-    src_sequence_lengths, sorted_idx = src_sequence_lengths.sort(descending=True)
+    src_sequences, src_sequence_lengths = pad_tokenized_sequence(
+        [src for src, _ in batch])
+    tgt_sequences, tgt_sequence_lengths = pad_tokenized_sequence(
+        [tgt for _, tgt in batch])
+    src_sequence_lengths, sorted_idx = src_sequence_lengths.sort(
+        descending=True)
 
     src_sequences = src_sequences[sorted_idx].contiguous()
     tgt_sequences = tgt_sequences[sorted_idx].contiguous()
