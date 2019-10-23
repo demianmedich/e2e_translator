@@ -72,7 +72,7 @@ class MecabTokenizer(Tokenizer):
                     line.insert(0, SOS_TOKEN)
                 if self.eos_token is not None:
                     line.append(EOS_TOKEN)
-            morphs_list.append(line)
+                morphs_list.append(line)
         return morphs_list
 
 
@@ -103,5 +103,5 @@ class NltkTokenizer(Tokenizer):
                     line.insert(0, SOS_TOKEN)
                 if self.eos_token is not None:
                     line.append(EOS_TOKEN)
-            morphs_list.append(line)
+                morphs_list.append(line)
         return morphs_list
