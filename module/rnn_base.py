@@ -17,14 +17,17 @@ class GruEncoder(nn.Module):
     """Gru Encoder"""
 
     def __init__(self,
-                 config: AttributeDict):
+                 vocab_size,
+                 embedding_dim,
+                 hidden_size,
+                 **kwargs):
         super().__init__()
-        self.vocab_size = config.vocab_size
-        self.embedding_dim = config.embedding_size
-        self.hidden_size = config.hidden_size
-        self.bidirectional = config.get('bidirectional', False)
-        self.num_layers = config.get('num_layers', 1)
-        self.dropout_prob = config.get('dropout_prob', 0.0)
+        self.vocab_size = vocab_size
+        self.embedding_dim = embedding_dim
+        self.hidden_size = hidden_size
+        self.bidirectional = kwargs.get('bidirectional', False)
+        self.num_layers = kwargs.get('num_layers', 1)
+        self.dropout_prob = kwargs.get('dropout_prob', 0.0)
 
         self.embedding_lookup = nn.Embedding(self.vocab_size,
                                              self.embedding_dim,
