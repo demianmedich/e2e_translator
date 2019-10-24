@@ -125,6 +125,8 @@ def make_word2vec_embedding_vocab_weight(
     embedding = Word2VecEmbedding(sentences=sentences, dim=embedding_dim)
     vocab = [f'{token}\n' for token in embedding.vocab]
     with open(vocab_path, mode='w', encoding='utf-8') as f:
+        for token in SPECIAL_TOKENS:
+            f.write(token + '\n')
         f.writelines(vocab)
     np.save(weight_path, embedding.get_embedding_matrix())
     return embedding
