@@ -16,5 +16,6 @@ class Seq2Seq(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
 
-    def forward(self, x, seq_lengths):
-        return self.decoder(self.encoder(x, seq_lengths))
+    def forward(self, src_seqs, src_seq_lengths, tgt_seqs, tgt_seq_lengths):
+        encoded_result = self.encoder(src_seqs, src_seq_lengths)
+        return self.decoder(*encoded_result, tgt_seqs, tgt_seq_lengths)

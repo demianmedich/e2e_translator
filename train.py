@@ -6,21 +6,26 @@ from __future__ import unicode_literals
 
 import os
 
-from torch.utils.data import DataLoader
+import numpy as np
+import torch
 from torch import nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from dataset import ParallelTextData
-from dataset import collate_func
+from module import GruEncoder, GruDecoder
+from module import Seq2Seq
 from module.embedding import make_fasttext_embedding_vocab_weight
 from module.preprocess import MecabTokenizer
 from module.preprocess import NltkTokenizer
 from util import AttributeDict
 
-config = AttributeDict({
+train_config = AttributeDict({
     "n_epochs": 1,
-    "batch_size": 64,
-    "src_tokenizer": MecabTokenizer,
-    "tgt_tokenizer": MecabTokenizer,
+    "batch_size": 32,
+    "learning_rate": 1e-4,
+    "src_tokenizer": NltkTokenizer,
+    "tgt_tokenizer": NltkTokenizer,
     "src_vocab_filename": "src_vocab.txt",
     "src_word_embedding_filename": "src_word_embedding.npy",
     "tgt_vocab_filename": "tgt_vocab.txt",
@@ -30,8 +35,25 @@ config = AttributeDict({
     "embedding_dim": 100,
 })
 
+encoder_params = AttributeDict({
+    "hidden_size": 256,
+    "num_layers": 2,
+    "dropout_prob": 0.3,
+    "bidirectional": True,
+    "max_seq_len": 100,
+})
+
+decoder_params = AttributeDict({
+    "hidden_size": 256,
+    "num_layers": 2,
+    "dropout_prob": 0.3,
+    "max_seq_len": 100,
+})
+
 
 def check_config(config: AttributeDict):
+    assert isinstance(config.get('learning_rate'), float), \
+        'learning_rate should be float value.'
     assert config.get('src_tokenizer', '') in [
         MecabTokenizer, NltkTokenizer
     ], 'src_tokenizer should be one of following [MecabTokenizer, NltkTokenizer]'
@@ -87,31 +109,76 @@ def ensure_vocab_embedding(
         word2id[token] = index
         id2word[index] = token
 
-    return word2id, id2word
+    embedding_matrix = np.load(word_embedding_file_path)
+
+    return word2id, id2word, embedding_matrix
 
 
-# def train_model(model: nn.Module, )
+def train_model(model: nn.Module,
+                optimizer,
+                loss_func,
+                data_loader: DataLoader,
+                gpu,
+                train_config: AttributeDict,
+                epoch: int):
+    # Set train flag
+    n_epochs = train_config.n_epochs
+    model.train()
+    losses = []
+    data_length = len(data_loader)
+
+    for _, batch in enumerate(tqdm(data_loader, total=data_length, desc=f'Epoch {epoch:3}')):
+        src_seqs, src_lengths, tgt_seqs, tgt_lengths = batch
+        # output = model(src_seqs.to(device),
+        #                src_lengths.to(device),
+        #                tgt_seqs.to(device),
+        #                tgt_lengths.to(device))
+        logits, labels, predictions = model(src_seqs,
+                                            src_lengths,
+                                            tgt_seqs,
+                                            tgt_lengths)
+
+        # logits: torch.Size([3200, 19881]), labels: torch.Size([3200])
+        loss = loss_func(logits, labels)
+        losses.append(loss.item())
+
+        # initialize buffer
+        optimizer.zero_grad()
+
+        # calculate gradient
+        loss.backward()
+
+        # update model parameter
+        optimizer.step()
+
+    print(f'Epochs [{epoch}/{n_epochs}] avg losses: {np.mean(losses):05.3f}')
+    return
 
 
 if __name__ == '__main__':
     # 1. preprocessing
     tokenizer = MecabTokenizer()
 
-    check_config(config)
+    check_config(train_config)
+    gpu = True if torch.cuda.is_available() else False
+    if gpu:
+        print(f'CUDA is available.')
 
     base_dir = os.getcwd()
     dataset_dir = os.path.join(base_dir, 'dataset')
 
-    src_vocab_file_path = os.path.join(dataset_dir, config.src_vocab_filename)
-    tgt_vocab_file_path = os.path.join(dataset_dir, config.tgt_vocab_filename)
-    src_word_embedding_file_path = os.path.join(dataset_dir, config.src_word_embedding_filename)
-    tgt_word_embedding_file_path = os.path.join(dataset_dir, config.tgt_word_embedding_filename)
-    train_src_corpus_file_path = os.path.join(dataset_dir, config.train_src_corpus_filename)
-    train_tgt_corpus_file_path = os.path.join(dataset_dir, config.train_tgt_corpus_filename)
+    src_vocab_file_path = os.path.join(dataset_dir, train_config.src_vocab_filename)
+    tgt_vocab_file_path = os.path.join(dataset_dir, train_config.tgt_vocab_filename)
+    src_word_embedding_file_path = os.path.join(dataset_dir,
+                                                train_config.src_word_embedding_filename)
+    tgt_word_embedding_file_path = os.path.join(dataset_dir,
+                                                train_config.tgt_word_embedding_filename)
+    train_src_corpus_file_path = os.path.join(dataset_dir, train_config.train_src_corpus_filename)
+    train_tgt_corpus_file_path = os.path.join(dataset_dir, train_config.train_tgt_corpus_filename)
 
-    embedding_dim = config.embedding_dim
+    embedding_dim = train_config.embedding_dim
 
-    src_word2id, src_id2word = ensure_vocab_embedding(
+    src_word2id, src_id2word, src_embed_matrix = ensure_vocab_embedding(
         tokenizer,
         src_vocab_file_path,
         src_word_embedding_file_path,
@@ -119,7 +186,7 @@ if __name__ == '__main__':
         embedding_dim,
         "Source")
 
-    tgt_word2id, tgt_id2word = ensure_vocab_embedding(
+    tgt_word2id, tgt_id2word, tgt_embed_matrix = ensure_vocab_embedding(
         tokenizer,
         tgt_vocab_file_path,
         tgt_word_embedding_file_path,
@@ -131,19 +198,36 @@ if __name__ == '__main__':
     dataset = ParallelTextData(tokenizer,
                                train_src_corpus_file_path,
                                train_tgt_corpus_file_path,
+                               encoder_params.max_seq_len,
+                               decoder_params.max_seq_len,
                                src_word2id,
                                tgt_word2id)
     data_loader = DataLoader(dataset,
-                             batch_size=config.batch_size,
+                             batch_size=train_config.batch_size,
                              shuffle=True,
-                             collate_fn=collate_func)
+                             collate_fn=dataset.collate_func)
 
-    for index, batch in enumerate(data_loader):
-        # print(batch)
-        if index == 0:
-            src_seqs, src_seq_lengths, tgt_seqs, tgt_seq_lengths = batch[0], batch[1], batch[2], \
-                                                                   batch[3]
-            # [print(idx) for idx in src_seqs[0]]
-            print([src_id2word[idx.item()] for idx in src_seqs[5]])
-            print([tgt_id2word[idx.item()] for idx in tgt_seqs[5]])
-        pass
+    encoder = GruEncoder(vocab_size=len(src_word2id),
+                         embedding_dim=embedding_dim,
+                         hidden_size=encoder_params.hidden_size,
+                         bidirectional=encoder_params.bidirectional,
+                         num_layers=encoder_params.num_layers,
+                         dropout_prob=encoder_params.dropout_prob,
+                         gpu=gpu)
+    encoder.init_embedding_weight(src_embed_matrix)
+
+    decoder = GruDecoder(vocab_size=len(tgt_word2id),
+                         embedding_dim=embedding_dim,
+                         hidden_size=decoder_params.hidden_size,
+                         num_layers=decoder_params.num_layers,
+                         dropout_prob=decoder_params.dropout_prob,
+                         gpu=gpu)
+    decoder.init_embedding_weight(tgt_embed_matrix)
+
+    model = Seq2Seq(encoder, decoder)
+    loss_func = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=train_config.learning_rate)
+
+    for epoch in range(train_config.n_epochs):
+        train_model(model, optimizer, loss_func, data_loader, gpu, train_config,
+                    epoch + 1)

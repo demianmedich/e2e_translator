@@ -19,12 +19,16 @@ class ParallelTextData(data.Dataset):
                  tokenizer,
                  src_corpus_path: str,
                  tgt_corpus_path: str,
+                 max_src_length: int,
+                 max_tgt_length: int,
                  src_word2id: dict,
                  tgt_word2id: dict):
         super().__init__()
         self.tokenizer = tokenizer
         self.src_word2id = src_word2id
         self.tgt_word2id = tgt_word2id
+        self.max_src_length = max_src_length
+        self.max_tgt_length = max_tgt_length
 
         with open(src_corpus_path, mode='r', encoding='utf-8') as src, \
                 open(tgt_corpus_path, mode='r', encoding='utf-8') as tgt:
@@ -43,8 +47,6 @@ class ParallelTextData(data.Dataset):
 
     def __getitem__(self, index: int):
         src, tgt = self.pair_sentences[index]
-        # print(src)
-        # print(tgt)
         src_tokens = []
         tgt_tokens = []
 
@@ -67,45 +69,47 @@ class ParallelTextData(data.Dataset):
     def __len__(self):
         return len(self.pair_sentences)
 
+    @staticmethod
+    def pad_tensor(sentence, max_len, pad_value=0):
+        """Append padding to one sentence"""
+        pad_size = max_len - len(sentence)
+        for _ in range(pad_size):
+            sentence.append(pad_value)
 
-def pad_tensor(sentence, max_len, pad_value=0):
-    """Append padding to one sentence"""
-    pad_size = max_len - len(sentence)
-    for _ in range(pad_size):
-        sentence.append(pad_value)
+    @staticmethod
+    def pad_tokenized_sequence(tokenized_sequence, max_length=None):
+        """
+        Append padding to several sentences
 
+        :param tokenized_sequence: sequence with several tokens.
+        :param max_length: maximum length for tokenized sequence.
+        :return: padded_token_sequence, sequence_length excluding padding
+        """
+        sequence_lengths = torch.tensor(
+            [len(sentence) for sentence in tokenized_sequence])
+        if max_length is None:
+            max_length = int(max(sequence_lengths).item())
 
-def pad_tokenized_sequence(tokenized_sequence):
-    """
-    Append padding to several sentences
+        [ParallelTextData.pad_tensor(sentence, max_length,
+                                     pad_value=SPECIAL_TOKENS.index(PAD_TOKEN)) for sentence in
+         tokenized_sequence]
+        padded_tokens = torch.tensor(tokenized_sequence)
+        return padded_tokens, sequence_lengths
 
-    :param tokenized_sequence: sequence with several tokens
-    :return: padded_token_sequence, sequence_length excluding padding
-    """
-    sequence_lengths = torch.tensor(
-        [len(sentence) for sentence in tokenized_sequence])
-    max_len = int(max(sequence_lengths).item())
-    [pad_tensor(sentence, max_len=max_len,
-                pad_value=SPECIAL_TOKENS.index(PAD_TOKEN)) for sentence in
-     tokenized_sequence]
-    padded_tokens = torch.tensor(tokenized_sequence)
-    return padded_tokens, sequence_lengths
+    def collate_func(self, batch):
+        """
+        Called whenever mini-batch decided.
+        :returns src_seqs, src_seq_lengths, tgt_seqs, tgt_seq_lengths
+        """
+        src_sequences, src_sequence_lengths = ParallelTextData.pad_tokenized_sequence(
+            [src for src, _ in batch], self.max_src_length)
+        tgt_sequences, tgt_sequence_lengths = ParallelTextData.pad_tokenized_sequence(
+            [tgt for _, tgt in batch], self.max_tgt_length)
+        src_sequence_lengths, sorted_idx = src_sequence_lengths.sort(
+            descending=True)
 
+        src_sequences = src_sequences[sorted_idx].contiguous()
+        tgt_sequences = tgt_sequences[sorted_idx].contiguous()
 
-def collate_func(batch):
-    """
-    Called whenever mini-batch decided.
-    :returns src_seqs, src_seq_lengths, tgt_seqs, tgt_seq_lengths
-    """
-    src_sequences, src_sequence_lengths = pad_tokenized_sequence(
-        [src for src, _ in batch])
-    tgt_sequences, tgt_sequence_lengths = pad_tokenized_sequence(
-        [tgt for _, tgt in batch])
-    src_sequence_lengths, sorted_idx = src_sequence_lengths.sort(
-        descending=True)
-
-    src_sequences = src_sequences[sorted_idx].contiguous()
-    tgt_sequences = tgt_sequences[sorted_idx].contiguous()
-
-    return src_sequences.long(), src_sequence_lengths.int(), \
-           tgt_sequences.long(), tgt_sequence_lengths.int()
+        return src_sequences.long(), src_sequence_lengths.int(), \
+               tgt_sequences.long(), tgt_sequence_lengths.int()

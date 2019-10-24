@@ -9,3 +9,4 @@ from .embedding import FastTextEmbedding
 from .embedding import WordEmbedding
 from .preprocess import MecabTokenizer
 from .preprocess import Tokenizer
+from .rnn_base import GruEncoder, GruDecoder
