@@ -16,7 +16,8 @@ from util.tokens import UNK_TOKEN
 class ParallelTextData(data.Dataset):
 
     def __init__(self,
-                 tokenizer,
+                 src_tokenizer,
+                 tgt_tokenizer,
                  src_corpus_path: str,
                  tgt_corpus_path: str,
                  max_src_length: int,
@@ -24,11 +25,12 @@ class ParallelTextData(data.Dataset):
                  src_word2id: dict,
                  tgt_word2id: dict):
         super().__init__()
-        self.tokenizer = tokenizer
+        self.src_tokenizer = src_tokenizer
+        self.tgt_tokenizer = tgt_tokenizer
         self.src_word2id = src_word2id
         self.tgt_word2id = tgt_word2id
-        self.max_src_length = max_src_length
-        self.max_tgt_length = max_tgt_length
+        self.src_max_length = max_src_length
+        self.tgt_max_length = max_tgt_length
 
         with open(src_corpus_path, mode='r', encoding='utf-8') as src, \
                 open(tgt_corpus_path, mode='r', encoding='utf-8') as tgt:
@@ -50,14 +52,18 @@ class ParallelTextData(data.Dataset):
         src_tokens = []
         tgt_tokens = []
 
-        for token in self.tokenizer.tokenize(src):
+        for i, token in enumerate(self.src_tokenizer.tokenize(src)):
+            if i == self.src_max_length:
+                break
             if token in self.src_word2id:
                 src_tokens.append(self.src_word2id[token])
             else:
                 src_tokens.append(self.src_word2id[UNK_TOKEN])
         src_tokens.append(self.src_word2id[EOS_TOKEN])
 
-        for token in self.tokenizer.tokenize(tgt):
+        for i, token in enumerate(self.tgt_tokenizer.tokenize(tgt)):
+            if i == self.tgt_max_length:
+                break
             if token in self.tgt_word2id:
                 tgt_tokens.append(self.tgt_word2id[token])
             else:
@@ -102,11 +108,10 @@ class ParallelTextData(data.Dataset):
         :returns src_seqs, src_seq_lengths, tgt_seqs, tgt_seq_lengths
         """
         src_sequences, src_sequence_lengths = ParallelTextData.pad_tokenized_sequence(
-            [src for src, _ in batch], self.max_src_length)
+            [src for src, _ in batch], self.src_max_length)
         tgt_sequences, tgt_sequence_lengths = ParallelTextData.pad_tokenized_sequence(
-            [tgt for _, tgt in batch], self.max_tgt_length)
-        src_sequence_lengths, sorted_idx = src_sequence_lengths.sort(
-            descending=True)
+            [tgt for _, tgt in batch], self.tgt_max_length)
+        src_sequence_lengths, sorted_idx = src_sequence_lengths.sort(descending=True)
 
         src_sequences = src_sequences[sorted_idx].contiguous()
         tgt_sequences = tgt_sequences[sorted_idx].contiguous()

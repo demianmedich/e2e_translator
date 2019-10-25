@@ -19,6 +19,7 @@ from module.embedding import make_fasttext_embedding_vocab_weight
 from module.preprocess import MecabTokenizer
 from module.preprocess import NltkTokenizer
 from util import AttributeDict
+from util import get_device
 
 train_config = AttributeDict({
     "n_epochs": 1,
@@ -32,10 +33,10 @@ train_config = AttributeDict({
     "tgt_word_embedding_filename": "tgt_word_embedding.npy",
     "train_src_corpus_filename": "korean-english-park.train.ko",
     "train_tgt_corpus_filename": "korean-english-park.train.en",
-    "embedding_dim": 100,
 })
 
 encoder_params = AttributeDict({
+    "embedding_dim": 100,
     "hidden_size": 256,
     "num_layers": 2,
     "dropout_prob": 0.3,
@@ -44,6 +45,7 @@ encoder_params = AttributeDict({
 })
 
 decoder_params = AttributeDict({
+    "embedding_dim": 100,
     "hidden_size": 256,
     "num_layers": 2,
     "dropout_prob": 0.3,
@@ -60,8 +62,6 @@ def check_config(config: AttributeDict):
     assert config.get('tgt_tokenizer', '') in [
         MecabTokenizer, NltkTokenizer
     ], 'tgt_tokenizer should be one of following [MecabTokenizer, NltkTokenizer]'
-    assert config.get('embedding_dim', None) is not None, \
-        'embedding_dim should be given more than 0'
     assert config.get('src_vocab_filename', None) is not None, \
         'src_vocab_filename must not be None'
     assert config.get('tgt_vocab_filename', None) is not None, \
@@ -118,27 +118,22 @@ def train_model(model: nn.Module,
                 optimizer,
                 loss_func,
                 data_loader: DataLoader,
-                gpu,
+                device,
                 train_config: AttributeDict,
                 epoch: int):
     # Set train flag
-    n_epochs = train_config.n_epochs
     model.train()
+    n_epochs = train_config.n_epochs
     losses = []
     data_length = len(data_loader)
 
     for _, batch in enumerate(tqdm(data_loader, total=data_length, desc=f'Epoch {epoch:3}')):
         src_seqs, src_lengths, tgt_seqs, tgt_lengths = batch
-        # output = model(src_seqs.to(device),
-        #                src_lengths.to(device),
-        #                tgt_seqs.to(device),
-        #                tgt_lengths.to(device))
         logits, labels, predictions = model(src_seqs,
                                             src_lengths,
                                             tgt_seqs,
                                             tgt_lengths)
 
-        # logits: torch.Size([3200, 19881]), labels: torch.Size([3200])
         loss = loss_func(logits, labels)
         losses.append(loss.item())
 
@@ -155,14 +150,18 @@ def train_model(model: nn.Module,
     return
 
 
-if __name__ == '__main__':
+def main():
     # 1. preprocessing
+    print("***** Train start *****")
     tokenizer = MecabTokenizer()
 
     check_config(train_config)
-    gpu = True if torch.cuda.is_available() else False
-    if gpu:
-        print(f'CUDA is available.')
+
+    device = get_device()
+    print(f'  Available device is {device}')
+
+    src_tokenizer = train_config.src_tokenizer()
+    tgt_tokenizer = train_config.tgt_tokenizer()
 
     base_dir = os.getcwd()
     dataset_dir = os.path.join(base_dir, 'dataset')
@@ -176,26 +175,25 @@ if __name__ == '__main__':
     train_src_corpus_file_path = os.path.join(dataset_dir, train_config.train_src_corpus_filename)
     train_tgt_corpus_file_path = os.path.join(dataset_dir, train_config.train_tgt_corpus_filename)
 
-    embedding_dim = train_config.embedding_dim
-
     src_word2id, src_id2word, src_embed_matrix = ensure_vocab_embedding(
-        tokenizer,
+        src_tokenizer,
         src_vocab_file_path,
         src_word_embedding_file_path,
         train_src_corpus_file_path,
-        embedding_dim,
+        encoder_params.embedding_dim,
         "Source")
 
     tgt_word2id, tgt_id2word, tgt_embed_matrix = ensure_vocab_embedding(
-        tokenizer,
+        tgt_tokenizer,
         tgt_vocab_file_path,
         tgt_word_embedding_file_path,
         train_tgt_corpus_file_path,
-        embedding_dim,
+        decoder_params.embedding_dim,
         "Target")
 
     # 2. train model
-    dataset = ParallelTextData(tokenizer,
+    dataset = ParallelTextData(src_tokenizer,
+                               tgt_tokenizer,
                                train_src_corpus_file_path,
                                train_tgt_corpus_file_path,
                                encoder_params.max_seq_len,
@@ -208,20 +206,22 @@ if __name__ == '__main__':
                              collate_fn=dataset.collate_func)
 
     encoder = GruEncoder(vocab_size=len(src_word2id),
-                         embedding_dim=embedding_dim,
+                         embedding_dim=encoder_params.embedding_dim,
                          hidden_size=encoder_params.hidden_size,
                          bidirectional=encoder_params.bidirectional,
                          num_layers=encoder_params.num_layers,
                          dropout_prob=encoder_params.dropout_prob,
-                         gpu=gpu)
+                         device=device)
+    # Freeze word embedding weight
     encoder.init_embedding_weight(src_embed_matrix)
 
     decoder = GruDecoder(vocab_size=len(tgt_word2id),
-                         embedding_dim=embedding_dim,
+                         embedding_dim=decoder_params.embedding_dim,
                          hidden_size=decoder_params.hidden_size,
                          num_layers=decoder_params.num_layers,
                          dropout_prob=decoder_params.dropout_prob,
-                         gpu=gpu)
+                         device=device)
+    # Freeze word embedding weight
     decoder.init_embedding_weight(tgt_embed_matrix)
 
     model = Seq2Seq(encoder, decoder)
@@ -229,5 +229,9 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(model.parameters(), lr=train_config.learning_rate)
 
     for epoch in range(train_config.n_epochs):
-        train_model(model, optimizer, loss_func, data_loader, gpu, train_config,
+        train_model(model, optimizer, loss_func, data_loader, device, train_config,
                     epoch + 1)
+
+
+if __name__ == '__main__':
+    main()

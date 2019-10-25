@@ -3,6 +3,8 @@ import torch
 
 from module import GruEncoder, GruDecoder
 
+# Only Test purpose not evaluation scripts...
+
 batch_size = 16
 max_seq_len = 100
 tgt_max_seq_len = 50

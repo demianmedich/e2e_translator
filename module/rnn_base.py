@@ -29,7 +29,7 @@ class GruEncoder(nn.Module):
         self.bidirectional = kwargs.get('bidirectional', False)
         self.num_layers = kwargs.get('num_layers', 1)
         self.dropout_prob = kwargs.get('dropout_prob', 0.0)
-        self.gpu = kwargs.get('gpu', False)
+        self.device = kwargs.get('device', 'cpu')
 
         self.embedding_lookup = nn.Embedding(self.vocab_size,
                                              self.embedding_dim,
@@ -52,11 +52,9 @@ class GruEncoder(nn.Module):
 
         # output shape : (batch_size, seq_len, 2 * hidden_size)
         output, _ = pad_packed_sequence(output, batch_first=True, padding_value=PAD_TOKEN_ID)
-        print(f'output: {output.size()}, hidden_state: {hidden_state.size()}')
         if self.bidirectional:
             output = output[:, :, :self.hidden_size] + output[:, :, self.hidden_size:]
             hidden_state = hidden_state[:self.num_layers] + hidden_state[self.num_layers:]
-        print(f'output: {output.size()}, hidden_state: {hidden_state.size()}')
 
         # Standard rnn decoder cannot be bidirectional...
         return output, hidden_state
@@ -81,7 +79,7 @@ class GruDecoder(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = kwargs.get('num_layers', 1)
         self.dropout_prob = kwargs.get('dropout_prob', 0.0)
-        self.gpu = kwargs.get('gpu', False)
+        self.device = kwargs.get('device', 'cpu')
 
         self.embedding_lookup = nn.Embedding(self.vocab_size,
                                              self.embedding_dim,
@@ -99,17 +97,13 @@ class GruDecoder(nn.Module):
         # Decoder GRU cannot be bidirectional.
         # encoder output:  (batch, seq_len, num_directions * hidden_size) => batch_first=True
         # encoder hidden:  (num_layers * num_directions, batch, hidden_size)
-        print('*** Decoder forward() ***')
-        print(
-            f'encoder_output: {encoder_output.size()}, encoder_hidden_state: {encoder_hidden_state.size()}')
+
         batch_size = encoder_output.size(0)
         max_seq_len = tgt_seqs.size(-1)
-        print(f'batch_size: {batch_size}')
         # (Batch_size)
         initial_input = batch_size * [SOS_TOKEN_ID]
         initial_input = torch.tensor(initial_input, dtype=torch.long).unsqueeze(
             -1)
-        print(f'initial_input: {initial_input.size()}')
 
         # predicted output will be saved here
         logits = torch.zeros(max_seq_len, batch_size, self.vocab_size)
@@ -118,7 +112,6 @@ class GruDecoder(nn.Module):
         prev_hidden_state = encoder_hidden_state
 
         predictions = []
-        print(f'tgt_seqs: {tgt_seqs.size(-1)}')
         for t in range(tgt_seqs.size(-1)):
             decoder_output, hidden_state = self.step(t, decoder_input, prev_hidden_state)
             logits[t] = decoder_output
@@ -145,20 +138,13 @@ class GruDecoder(nn.Module):
         return logits, labels, predictions
 
     def step(self, t, inputs, prev_hidden_state):
-        # print(
-        #     f'[time step {t}], inputs: {inputs.size()}, prev_hidden_state: {prev_hidden_state.size()}')
         embedding = self.embedding_lookup(inputs)
-        # print(f'embedding: {embedding.size()}')
-        # output shape : (seq_len, batch_size, hidden_size)
-        # hidden shape : (num_layers, batch_size, hidden_size)
+
         outputs, hidden_state = self.rnn(embedding, prev_hidden_state)
         outputs = self.linear_transform(outputs.transpose(0, 1).squeeze(0))
-        # print(f'step outputs: {outputs.size()}, hidden: {hidden_state.size()}')
 
         if self.decoder_output_func:
             outputs = self.decoder_output_func(outputs, dim=-1)
-
-        # print(f'step decoder outputs: {outputs.size()}')
 
         # To save in logits, seq_len should be removed.
         return outputs, hidden_state
