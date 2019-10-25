@@ -128,7 +128,10 @@ def make_word2vec_embedding_vocab_weight(
         for token in SPECIAL_TOKENS:
             f.write(token + '\n')
         f.writelines(vocab)
-    np.save(weight_path, embedding.get_embedding_matrix())
+    matrix = embedding.get_embedding_matrix()
+    for index, token in enumerate(SPECIAL_TOKENS):
+        matrix = np.insert(matrix, index, np.random.randn(embedding_dim), axis=0)
+    np.save(weight_path, matrix)
     return embedding
 
 
@@ -154,6 +157,6 @@ def make_fasttext_embedding_vocab_weight(
         f.writelines(vocab)
     matrix = embedding.get_embedding_matrix()
     for index, token in enumerate(SPECIAL_TOKENS):
-        np.insert(matrix, index, np.random.randn(embedding_dim), axis=0)
+        matrix = np.insert(matrix, index, np.random.randn(embedding_dim), axis=0)
     np.save(weight_path, matrix)
     return embedding

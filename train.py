@@ -106,6 +106,8 @@ def ensure_vocab_embedding(
     id2word = {}
     for index, token in enumerate(tokens):
         token = token.strip()
+        if len(token) == 0:
+            continue
         word2id[token] = index
         id2word[index] = token
 

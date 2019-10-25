@@ -115,6 +115,7 @@ class ParallelTextData(data.Dataset):
 
         src_sequences = src_sequences[sorted_idx].contiguous()
         tgt_sequences = tgt_sequences[sorted_idx].contiguous()
+        tgt_sequence_lengths = tgt_sequence_lengths[sorted_idx].contiguous()
 
         return src_sequences.long(), src_sequence_lengths.int(), \
                tgt_sequences.long(), tgt_sequence_lengths.int()
