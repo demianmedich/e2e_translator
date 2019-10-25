@@ -61,8 +61,7 @@ class GruEncoder(nn.Module):
 
     def init_embedding_weight(self,
                               weight: np.ndarray):
-        self.embedding_lookup.weight = nn.Parameter(torch.from_numpy(weight),
-                                                    requires_grad=False)
+        self.embedding_lookup.weight = nn.Parameter(torch.from_numpy(weight), requires_grad=False)
 
 
 class GruDecoder(nn.Module):
@@ -102,11 +101,11 @@ class GruDecoder(nn.Module):
         max_seq_len = tgt_seqs.size(-1)
         # (Batch_size)
         initial_input = batch_size * [SOS_TOKEN_ID]
-        initial_input = torch.tensor(initial_input, dtype=torch.long).unsqueeze(
+        initial_input = torch.tensor(initial_input, dtype=torch.long, device=self.device).unsqueeze(
             -1)
 
         # predicted output will be saved here
-        logits = torch.zeros(max_seq_len, batch_size, self.vocab_size)
+        logits = torch.zeros(max_seq_len, batch_size, self.vocab_size, device=self.device)
 
         decoder_input = initial_input
         prev_hidden_state = encoder_hidden_state
@@ -151,5 +150,4 @@ class GruDecoder(nn.Module):
 
     def init_embedding_weight(self,
                               weight: np.ndarray):
-        self.embedding_lookup.weight = nn.Parameter(torch.from_numpy(weight),
-                                                    requires_grad=False)
+        self.embedding_lookup.weight = nn.Parameter(torch.from_numpy(weight), requires_grad=False)

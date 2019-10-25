@@ -23,7 +23,7 @@ from util import get_device
 
 train_config = AttributeDict({
     "n_epochs": 1,
-    "batch_size": 32,
+    "batch_size": 64,
     "learning_rate": 1e-4,
     "src_tokenizer": NltkTokenizer,
     "tgt_tokenizer": NltkTokenizer,
@@ -131,10 +131,11 @@ def train_model(model: nn.Module,
 
     for _, batch in enumerate(tqdm(data_loader, total=data_length, desc=f'Epoch {epoch:3}')):
         src_seqs, src_lengths, tgt_seqs, tgt_lengths = batch
-        logits, labels, predictions = model(src_seqs,
-                                            src_lengths,
-                                            tgt_seqs,
-                                            tgt_lengths)
+        src_seqs = src_seqs.to(device)
+        src_lengths = src_lengths.to(device)
+        tgt_seqs = tgt_seqs.to(device)
+        tgt_lengths = tgt_lengths.to(device)
+        logits, labels, predictions = model(src_seqs, src_lengths, tgt_seqs, tgt_lengths)
 
         loss = loss_func(logits, labels)
         losses.append(loss.item())
@@ -153,7 +154,6 @@ def train_model(model: nn.Module,
 
 
 def main():
-    # 1. preprocessing
     print("***** Train start *****")
     tokenizer = MecabTokenizer()
 
@@ -193,7 +193,6 @@ def main():
         decoder_params.embedding_dim,
         "Target")
 
-    # 2. train model
     dataset = ParallelTextData(src_tokenizer,
                                tgt_tokenizer,
                                train_src_corpus_file_path,
@@ -226,7 +225,7 @@ def main():
     # Freeze word embedding weight
     decoder.init_embedding_weight(tgt_embed_matrix)
 
-    model = Seq2Seq(encoder, decoder)
+    model = Seq2Seq(encoder, decoder).to(device)
     loss_func = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=train_config.learning_rate)
 
