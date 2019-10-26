@@ -10,6 +10,7 @@ from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence
 from torch.nn.utils.rnn import pad_packed_sequence
 
+from util import AttributeDict
 from util.tokens import PAD_TOKEN_ID
 from util.tokens import SOS_TOKEN_ID
 
@@ -17,19 +18,15 @@ from util.tokens import SOS_TOKEN_ID
 class GruEncoder(nn.Module):
     """Gru Encoder"""
 
-    def __init__(self,
-                 vocab_size,
-                 embedding_dim,
-                 hidden_size,
-                 **kwargs):
+    def __init__(self, encoder_params: AttributeDict):
         super().__init__()
-        self.vocab_size = vocab_size
-        self.embedding_dim = embedding_dim
-        self.hidden_size = hidden_size
-        self.bidirectional = kwargs.get('bidirectional', False)
-        self.num_layers = kwargs.get('num_layers', 1)
-        self.dropout_prob = kwargs.get('dropout_prob', 0.0)
-        self.device = kwargs.get('device', 'cpu')
+        self.vocab_size = encoder_params.vocab_size
+        self.embedding_dim = encoder_params.embedding_dim
+        self.hidden_size = encoder_params.hidden_size
+        self.bidirectional = encoder_params.get('bidirectional', False)
+        self.num_layers = encoder_params.get('num_layers', 1)
+        self.dropout_prob = encoder_params.get('dropout_prob', 0.0)
+        self.device = encoder_params.get('device', 'cpu')
 
         self.embedding_lookup = nn.Embedding(self.vocab_size,
                                              self.embedding_dim,
@@ -56,7 +53,6 @@ class GruEncoder(nn.Module):
             output = output[:, :, :self.hidden_size] + output[:, :, self.hidden_size:]
             hidden_state = hidden_state[:self.num_layers] + hidden_state[self.num_layers:]
 
-        # Standard rnn decoder cannot be bidirectional...
         return output, hidden_state
 
     def init_embedding_weight(self,
@@ -67,18 +63,15 @@ class GruEncoder(nn.Module):
 class GruDecoder(nn.Module):
     """Gru Decoder"""
 
-    def __init__(self,
-                 vocab_size,
-                 embedding_dim,
-                 hidden_size,
-                 **kwargs):
+    def __init__(self, decoder_params: AttributeDict):
         super().__init__()
-        self.vocab_size = vocab_size
-        self.embedding_dim = embedding_dim
-        self.hidden_size = hidden_size
-        self.num_layers = kwargs.get('num_layers', 1)
-        self.dropout_prob = kwargs.get('dropout_prob', 0.0)
-        self.device = kwargs.get('device', 'cpu')
+        self.vocab_size = decoder_params.vocab_size
+        self.embedding_dim = decoder_params.embedding_dim
+        self.hidden_size = decoder_params.hidden_size
+        self.max_seq_len = decoder_params.max_seq_len
+        self.num_layers = decoder_params.get('num_layers', 1)
+        self.dropout_prob = decoder_params.get('dropout_prob', 0.0)
+        self.device = decoder_params.get('device', 'cpu')
 
         self.embedding_lookup = nn.Embedding(self.vocab_size,
                                              self.embedding_dim,
@@ -98,24 +91,24 @@ class GruDecoder(nn.Module):
         # encoder hidden:  (num_layers * num_directions, batch, hidden_size)
 
         batch_size = encoder_output.size(0)
-        max_seq_len = tgt_seqs.size(-1)
         # (Batch_size)
         initial_input = batch_size * [SOS_TOKEN_ID]
         initial_input = torch.tensor(initial_input, dtype=torch.long, device=self.device).unsqueeze(
             -1)
 
         # predicted output will be saved here
-        logits = torch.zeros(max_seq_len, batch_size, self.vocab_size, device=self.device)
+        logits = torch.zeros(self.max_seq_len, batch_size, self.vocab_size, device=self.device)
 
         decoder_input = initial_input
         prev_hidden_state = encoder_hidden_state
 
         predictions = []
-        for t in range(tgt_seqs.size(-1)):
+        for t in range(self.max_seq_len):
             decoder_output, hidden_state = self.step(t, decoder_input, prev_hidden_state)
             logits[t] = decoder_output
 
             if self.training:
+                # teacher forcing
                 decoder_input = tgt_seqs[:, t]
             else:
                 # Greedy search
@@ -126,15 +119,9 @@ class GruDecoder(nn.Module):
             decoder_input = decoder_input.long().unsqueeze(-1)
             prev_hidden_state = hidden_state
 
-        # To calculate loss, we should change shape of logits and labels
-        # N is batch * seq_len, C is number of classes. (vocab size)
-        # logits : (N by C)
-        # labels : (N)
         logits = logits.transpose(0, 1)
-        logits = logits.contiguous().view(-1, self.vocab_size)
-        labels = tgt_seqs.contiguous().view(-1)
 
-        return logits, labels, predictions
+        return logits, predictions
 
     def step(self, t, inputs, prev_hidden_state):
         embedding = self.embedding_lookup(inputs)

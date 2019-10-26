@@ -122,6 +122,8 @@ def train_model(model: nn.Module,
                 data_loader: DataLoader,
                 device,
                 train_config: AttributeDict,
+                enc_params: AttributeDict,
+                dec_params: AttributeDict,
                 epoch: int):
     # Set train flag
     model.train()
@@ -135,7 +137,14 @@ def train_model(model: nn.Module,
         src_lengths = src_lengths.to(device)
         tgt_seqs = tgt_seqs.to(device)
         tgt_lengths = tgt_lengths.to(device)
-        logits, labels, predictions = model(src_seqs, src_lengths, tgt_seqs, tgt_lengths)
+        logits, predictions = model(src_seqs, src_lengths, tgt_seqs, tgt_lengths)
+
+        # To calculate loss, we should change shape of logits and labels
+        # N is batch * seq_len, C is number of classes. (vocab size)
+        # logits : (N by C)
+        # labels : (N)
+        logits = logits.contiguous().view(-1, dec_params.max_seq_len)
+        labels = tgt_seqs.contiguous().view(-1)
 
         loss = loss_func(logits, labels)
         losses.append(loss.item())
@@ -206,22 +215,15 @@ def main():
                              shuffle=True,
                              collate_fn=dataset.collate_func)
 
-    encoder = GruEncoder(vocab_size=len(src_word2id),
-                         embedding_dim=encoder_params.embedding_dim,
-                         hidden_size=encoder_params.hidden_size,
-                         bidirectional=encoder_params.bidirectional,
-                         num_layers=encoder_params.num_layers,
-                         dropout_prob=encoder_params.dropout_prob,
-                         device=device)
+    encoder_params.vocab_size = len(src_word2id)
+    encoder_params.device = device
+    encoder = GruEncoder(encoder_params)
     # Freeze word embedding weight
     encoder.init_embedding_weight(src_embed_matrix)
 
-    decoder = GruDecoder(vocab_size=len(tgt_word2id),
-                         embedding_dim=decoder_params.embedding_dim,
-                         hidden_size=decoder_params.hidden_size,
-                         num_layers=decoder_params.num_layers,
-                         dropout_prob=decoder_params.dropout_prob,
-                         device=device)
+    decoder_params.vocab_size = len(tgt_word2id)
+    decoder_params.device = device
+    decoder = GruDecoder(decoder_params)
     # Freeze word embedding weight
     decoder.init_embedding_weight(tgt_embed_matrix)
 
@@ -231,7 +233,7 @@ def main():
 
     for epoch in range(train_config.n_epochs):
         train_model(model, optimizer, loss_func, data_loader, device, train_config,
-                    epoch + 1)
+                    encoder_params, decoder_params, epoch + 1)
 
 
 if __name__ == '__main__':
