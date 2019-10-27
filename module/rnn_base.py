@@ -72,6 +72,7 @@ class GruDecoder(nn.Module):
         self.num_layers = decoder_params.get('num_layers', 1)
         self.dropout_prob = decoder_params.get('dropout_prob', 0.0)
         self.device = decoder_params.get('device', 'cpu')
+        self.beam_size = decoder_params.get('beam_size', 1)
 
         self.embedding_lookup = nn.Embedding(self.vocab_size,
                                              self.embedding_dim,

@@ -19,9 +19,11 @@ from module.embedding import make_fasttext_embedding_vocab_weight
 from module.preprocess import MecabTokenizer
 from module.preprocess import NltkTokenizer
 from util import AttributeDict
+from util import get_checkpoint_dir_path
 from util import get_device
+from util import train_step
 
-train_config = AttributeDict({
+train_params = AttributeDict({
     "n_epochs": 1,
     "batch_size": 64,
     "learning_rate": 1e-4,
@@ -31,8 +33,9 @@ train_config = AttributeDict({
     "src_word_embedding_filename": "src_word_embedding.npy",
     "tgt_vocab_filename": "tgt_vocab.txt",
     "tgt_word_embedding_filename": "tgt_word_embedding.npy",
-    "train_src_corpus_filename": "korean-english-park.train.ko",
-    "train_tgt_corpus_filename": "korean-english-park.train.en",
+    "src_corpus_filename": "korean-english-park.dev.ko",
+    "tgt_corpus_filename": "korean-english-park.dev.en",
+    "model_save_directory": "kor2eng-gru-gru"
 })
 
 encoder_params = AttributeDict({
@@ -50,10 +53,11 @@ decoder_params = AttributeDict({
     "num_layers": 2,
     "dropout_prob": 0.3,
     "max_seq_len": 100,
+    "beam_size": 3,
 })
 
 
-def check_config(config: AttributeDict):
+def check_params(config: AttributeDict):
     assert isinstance(config.get('learning_rate'), float), \
         'learning_rate should be float value.'
     assert config.get('src_tokenizer', '') in [
@@ -70,10 +74,10 @@ def check_config(config: AttributeDict):
         'src_word_embedding_filename must not be None'
     assert config.get('tgt_word_embedding_filename', None) is not None, \
         'tgt_word_embedding_filename must not be None'
-    assert config.get('train_src_corpus_filename', None) is not None, \
-        'train_src_corpus_filename must not be None'
-    assert config.get('train_tgt_corpus_filename', None) is not None, \
-        'train_tgt_corpus_filename must not be None'
+    assert config.get('src_corpus_filename', None) is not None, \
+        'src_corpus_filename must not be None'
+    assert config.get('tgt_corpus_filename', None) is not None, \
+        'tgt_corpus_filename must not be None'
 
 
 def ensure_vocab_embedding(
@@ -98,7 +102,6 @@ def ensure_vocab_embedding(
             weight_path=word_embedding_file_path,
             embedding_dim=embedding_dimen,
         )
-        print(f'{tag} vocab size: {embedding.vocab_size}')
 
     with open(vocab_file_path, mode='r', encoding='utf-8') as f:
         tokens = f.readlines()
@@ -120,71 +123,48 @@ def train_model(model: nn.Module,
                 optimizer,
                 loss_func,
                 data_loader: DataLoader,
-                device,
-                train_config: AttributeDict,
+                device: str,
+                train_params: AttributeDict,
                 enc_params: AttributeDict,
                 dec_params: AttributeDict,
                 epoch: int):
     # Set train flag
     model.train()
-    n_epochs = train_config.n_epochs
+    n_epochs = train_params.n_epochs
     losses = []
     data_length = len(data_loader)
 
-    for _, batch in enumerate(tqdm(data_loader, total=data_length, desc=f'Epoch {epoch:3}')):
-        src_seqs, src_lengths, tgt_seqs, tgt_lengths = batch
-        src_seqs = src_seqs.to(device)
-        src_lengths = src_lengths.to(device)
-        tgt_seqs = tgt_seqs.to(device)
-        tgt_lengths = tgt_lengths.to(device)
-        logits, predictions = model(src_seqs, src_lengths, tgt_seqs, tgt_lengths)
+    with tqdm(data_loader, total=data_length, desc=f'Epoch {epoch:03d}') as tqdm_iterator:
+        for _, batch in enumerate(tqdm_iterator):
+            loss = train_step(model, device, batch, enc_params, dec_params, optimizer, loss_func)
+            losses.append(loss)
+            tqdm_iterator.set_postfix_str(f'loss: {loss:05.3f}')
 
-        # To calculate loss, we should change shape of logits and labels
-        # N is batch * seq_len, C is number of classes. (vocab size)
-        # logits : (N by C)
-        # labels : (N)
-        logits = logits.contiguous().view(-1, dec_params.max_seq_len)
-        labels = tgt_seqs.contiguous().view(-1)
-
-        loss = loss_func(logits, labels)
-        losses.append(loss.item())
-
-        # initialize buffer
-        optimizer.zero_grad()
-
-        # calculate gradient
-        loss.backward()
-
-        # update model parameter
-        optimizer.step()
-
-    print(f'Epochs [{epoch}/{n_epochs}] avg losses: {np.mean(losses):05.3f}')
-    return
+    avg_loss = np.mean(losses)
+    print(f'Epochs [{epoch}/{n_epochs}] avg losses: {avg_loss:05.3f}')
+    return avg_loss
 
 
 def main():
-    print("***** Train start *****")
-    tokenizer = MecabTokenizer()
-
-    check_config(train_config)
+    check_params(train_params)
 
     device = get_device()
     print(f'  Available device is {device}')
 
-    src_tokenizer = train_config.src_tokenizer()
-    tgt_tokenizer = train_config.tgt_tokenizer()
+    src_tokenizer = train_params.src_tokenizer()
+    tgt_tokenizer = train_params.tgt_tokenizer()
 
     base_dir = os.getcwd()
     dataset_dir = os.path.join(base_dir, 'dataset')
 
-    src_vocab_file_path = os.path.join(dataset_dir, train_config.src_vocab_filename)
-    tgt_vocab_file_path = os.path.join(dataset_dir, train_config.tgt_vocab_filename)
+    src_vocab_file_path = os.path.join(dataset_dir, train_params.src_vocab_filename)
+    tgt_vocab_file_path = os.path.join(dataset_dir, train_params.tgt_vocab_filename)
     src_word_embedding_file_path = os.path.join(dataset_dir,
-                                                train_config.src_word_embedding_filename)
+                                                train_params.src_word_embedding_filename)
     tgt_word_embedding_file_path = os.path.join(dataset_dir,
-                                                train_config.tgt_word_embedding_filename)
-    train_src_corpus_file_path = os.path.join(dataset_dir, train_config.train_src_corpus_filename)
-    train_tgt_corpus_file_path = os.path.join(dataset_dir, train_config.train_tgt_corpus_filename)
+                                                train_params.tgt_word_embedding_filename)
+    train_src_corpus_file_path = os.path.join(dataset_dir, train_params.src_corpus_filename)
+    train_tgt_corpus_file_path = os.path.join(dataset_dir, train_params.tgt_corpus_filename)
 
     src_word2id, src_id2word, src_embed_matrix = ensure_vocab_embedding(
         src_tokenizer,
@@ -211,7 +191,7 @@ def main():
                                src_word2id,
                                tgt_word2id)
     data_loader = DataLoader(dataset,
-                             batch_size=train_config.batch_size,
+                             batch_size=train_params.batch_size,
                              shuffle=True,
                              collate_fn=dataset.collate_func)
 
@@ -227,14 +207,33 @@ def main():
     # Freeze word embedding weight
     decoder.init_embedding_weight(tgt_embed_matrix)
 
-    model = Seq2Seq(encoder, decoder).to(device)
-    loss_func = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=train_config.learning_rate)
+    model: nn.Module = Seq2Seq(encoder, decoder)
+    model.to(device)
 
-    for epoch in range(train_config.n_epochs):
-        train_model(model, optimizer, loss_func, data_loader, device, train_config,
-                    encoder_params, decoder_params, epoch + 1)
+    loss_func = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=train_params.learning_rate)
+
+    epoch = 0
+    avg_loss = 0.
+    for epoch in range(train_params.n_epochs):
+        avg_loss = train_model(model, optimizer, loss_func, data_loader, device, train_params,
+                               encoder_params, decoder_params, epoch + 1)
+
+    save_dir_path = os.path.join(train_params.model_save_directory,
+                                 get_checkpoint_dir_path(epoch + 1))
+    if not os.path.exists(save_dir_path):
+        os.makedirs(save_dir_path)
+
+    # save checkpoint for last epoch
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'loss': avg_loss
+    }, os.path.join(save_dir_path, 'checkpoint.tar'))
 
 
 if __name__ == '__main__':
+    print("***** Training start *****")
     main()
+    print("***** Training end *****")
