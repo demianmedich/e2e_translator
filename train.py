@@ -12,7 +12,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from dataset import ParallelTextData
+from dataset import ParallelTextDataSet
 from module import Seq2Seq
 from module.embedding import make_fasttext_embedding_vocab_weight
 from module.tokenizer import MecabTokenizer
@@ -47,6 +47,10 @@ def check_params(config: AttributeDict):
         'src_corpus_filename must not be None'
     assert config.get('tgt_corpus_filename', None) is not None, \
         'tgt_corpus_filename must not be None'
+    assert config.get('encoder', None) is not None, \
+        'encoder should not be None'
+    assert config.get('decoder', None) is not None, \
+        'decoder should not be None'
 
 
 def ensure_vocab_embedding(
@@ -105,7 +109,7 @@ def train_model(model: nn.Module,
 
     with tqdm(data_loader, total=data_length, desc=f'Epoch {epoch:03d}') as tqdm_iterator:
         for _, batch in enumerate(tqdm_iterator):
-            loss = train_step(model, device, batch, enc_params, dec_params, optimizer, loss_func)
+            loss = train_step(model, device, batch, optimizer, loss_func)
             losses.append(loss)
             tqdm_iterator.set_postfix_str(f'loss: {loss:05.3f}')
 
@@ -132,14 +136,14 @@ def main():
                                                 train_params.src_word_embedding_filename)
     tgt_word_embedding_file_path = os.path.join(dataset_dir,
                                                 train_params.tgt_word_embedding_filename)
-    train_src_corpus_file_path = os.path.join(dataset_dir, train_params.src_corpus_filename)
-    train_tgt_corpus_file_path = os.path.join(dataset_dir, train_params.tgt_corpus_filename)
+    src_corpus_file_path = os.path.join(dataset_dir, train_params.src_corpus_filename)
+    tgt_corpus_file_path = os.path.join(dataset_dir, train_params.tgt_corpus_filename)
 
     src_word2id, src_id2word, src_embed_matrix = ensure_vocab_embedding(
         src_tokenizer,
         src_vocab_file_path,
         src_word_embedding_file_path,
-        train_src_corpus_file_path,
+        src_corpus_file_path,
         encoder_params.embedding_dim,
         "Source")
 
@@ -147,18 +151,18 @@ def main():
         tgt_tokenizer,
         tgt_vocab_file_path,
         tgt_word_embedding_file_path,
-        train_tgt_corpus_file_path,
+        tgt_corpus_file_path,
         decoder_params.embedding_dim,
         "Target")
 
-    dataset = ParallelTextData(src_tokenizer,
-                               tgt_tokenizer,
-                               train_src_corpus_file_path,
-                               train_tgt_corpus_file_path,
-                               encoder_params.max_seq_len,
-                               decoder_params.max_seq_len,
-                               src_word2id,
-                               tgt_word2id)
+    dataset = ParallelTextDataSet(src_tokenizer,
+                                  tgt_tokenizer,
+                                  src_corpus_file_path,
+                                  tgt_corpus_file_path,
+                                  encoder_params.max_seq_len,
+                                  decoder_params.max_seq_len,
+                                  src_word2id,
+                                  tgt_word2id)
     data_loader = DataLoader(dataset,
                              batch_size=train_params.batch_size,
                              shuffle=True,

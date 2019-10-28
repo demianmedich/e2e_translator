@@ -13,7 +13,7 @@ from util.tokens import SPECIAL_TOKENS
 from util.tokens import UNK_TOKEN
 
 
-class ParallelTextData(data.Dataset):
+class ParallelTextDataSet(data.Dataset):
 
     def __init__(self,
                  src_tokenizer,
@@ -51,7 +51,6 @@ class ParallelTextData(data.Dataset):
         src, tgt = self.pair_sentences[index]
         src_tokens = []
         tgt_tokens = []
-
         for i, token in enumerate(self.src_tokenizer.tokenize(src)):
             if i == self.src_max_length:
                 break
@@ -96,8 +95,8 @@ class ParallelTextData(data.Dataset):
         if max_length is None:
             max_length = int(max(sequence_lengths).item())
 
-        [ParallelTextData.pad_tensor(sentence, max_length,
-                                     pad_value=SPECIAL_TOKENS.index(PAD_TOKEN)) for sentence in
+        [ParallelTextDataSet.pad_tensor(sentence, max_length,
+                                        pad_value=SPECIAL_TOKENS.index(PAD_TOKEN)) for sentence in
          tokenized_sequence]
         padded_tokens = torch.tensor(tokenized_sequence)
         return padded_tokens, sequence_lengths
@@ -107,9 +106,9 @@ class ParallelTextData(data.Dataset):
         Called whenever mini-batch decided.
         :returns src_seqs, src_seq_lengths, tgt_seqs, tgt_seq_lengths
         """
-        src_sequences, src_sequence_lengths = ParallelTextData.pad_tokenized_sequence(
+        src_sequences, src_sequence_lengths = ParallelTextDataSet.pad_tokenized_sequence(
             [src for src, _ in batch], self.src_max_length)
-        tgt_sequences, tgt_sequence_lengths = ParallelTextData.pad_tokenized_sequence(
+        tgt_sequences, tgt_sequence_lengths = ParallelTextDataSet.pad_tokenized_sequence(
             [tgt for _, tgt in batch], self.tgt_max_length)
         src_sequence_lengths, sorted_idx = src_sequence_lengths.sort(descending=True)
 

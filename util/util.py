@@ -27,13 +27,11 @@ def get_checkpoint_dir_path(epoch: int) -> str:
     return f'{date_fmt}-epoch_{epoch:03d}'
 
 
-def train_step(model: nn.Module,
-               device: str,
-               batch,
-               enc_params: AttributeDict,
-               dec_params: AttributeDict,
-               optimizer,
-               loss_func):
+def eval_step(model: nn.Module,
+              device: str,
+              batch,
+              loss_func):
+    model.eval()
     src_seqs, src_lengths, tgt_seqs, tgt_lengths = batch
     src_seqs = src_seqs.to(device)
     src_lengths = src_lengths.to(device)
@@ -45,7 +43,33 @@ def train_step(model: nn.Module,
     # N is batch * seq_len, C is number of classes. (vocab size)
     # logits : (N by C)
     # labels : (N)
-    logits = logits.contiguous().view(-1, dec_params.vocab_size)
+    # TODO: PAD 고려??
+    logits = logits.contiguous().view(-1, logits.size(-1))
+    labels = tgt_seqs.contiguous().view(-1)
+
+    loss = loss_func(logits, labels)
+    return loss.item(), logits, predictions
+
+
+def train_step(model: nn.Module,
+               device: str,
+               batch,
+               optimizer,
+               loss_func):
+    model.train()
+    src_seqs, src_lengths, tgt_seqs, tgt_lengths = batch
+    src_seqs = src_seqs.to(device)
+    src_lengths = src_lengths.to(device)
+    tgt_seqs = tgt_seqs.to(device)
+    tgt_lengths = tgt_lengths.to(device)
+    logits, predictions = model(src_seqs, src_lengths, tgt_seqs, tgt_lengths)
+
+    # To calculate loss, we should change shape of logits and labels
+    # N is batch * seq_len, C is number of classes. (vocab size)
+    # logits : (N by C)
+    # labels : (N)
+    # TODO: PAD 고려??
+    logits = logits.contiguous().view(-1, logits.size(-1))
     labels = tgt_seqs.contiguous().view(-1)
 
     loss = loss_func(logits, labels)
@@ -59,31 +83,4 @@ def train_step(model: nn.Module,
     # update model parameter
     optimizer.step()
 
-    return loss.item()
-
-
-def eval_step(model: nn.Module,
-              device: str,
-              batch,
-              enc_params: AttributeDict,
-              dec_params: AttributeDict,
-              loss_func):
-    # TODO: need to implement
-    src_seqs, src_lengths, tgt_seqs, tgt_lengths = batch
-    src_seqs = src_seqs.to(device)
-    src_lengths = src_lengths.to(device)
-    tgt_seqs = tgt_seqs.to(device)
-    tgt_lengths = tgt_lengths.to(device)
-
-    model.eval()
-    logits, predictions = model(src_seqs, src_lengths, tgt_seqs, tgt_lengths)
-
-    # To calculate loss, we should change shape of logits and labels
-    # N is batch * seq_len, C is number of classes. (vocab size)
-    # logits : (N by C)
-    # labels : (N)
-    logits = logits.contiguous().view(-1, dec_params.vocab_size)
-    labels = tgt_seqs.contiguous().view(-1)
-
-    loss = loss_func(logits, labels)
     return loss.item()

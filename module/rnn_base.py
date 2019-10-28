@@ -121,7 +121,6 @@ class GruDecoder(nn.Module):
             prev_hidden_state = hidden_state
 
         logits = logits.transpose(0, 1)
-
         return logits, predictions
 
     def step(self, t, inputs, prev_hidden_state):

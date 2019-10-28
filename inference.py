@@ -6,14 +6,10 @@ from __future__ import unicode_literals
 
 import os
 
-import nltk
 import numpy as np
 import torch
 from torch import nn
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 
-from dataset import ParallelTextDataSet
 from module import Seq2Seq
 from module.tokenizer import MecabTokenizer
 from module.tokenizer import NltkTokenizer
@@ -21,9 +17,8 @@ from params import decoder_params
 from params import encoder_params
 from params import eval_params
 from util import AttributeDict
-from util import eval_step
-from util import get_device
 from util.tokens import PAD_TOKEN_ID
+from util.tokens import UNK_TOKEN_ID
 
 
 def check_params(config: AttributeDict):
@@ -77,63 +72,16 @@ def check_vocab_embedding(
     return word2id, id2word, embedding_matrix
 
 
-def eval_model(model: nn.Module,
-               loss_func,
-               test_data_loader: DataLoader,
-               device: str,
-               id2word: dict):
-    model.eval()
-
-    with torch.no_grad():
-        losses = []
-        data_length = len(test_data_loader)
-
-        predictions = []
-        target_sequences = []
-
-        with tqdm(test_data_loader, total=data_length, desc=f'EVAL') as tqdm_iterator:
-            for _, batch in enumerate(tqdm_iterator):
-                _, _, tgt_seqs, tgt_lengths = batch
-
-                # TODO: PAD 고려??
-                loss, logits, preds = eval_step(model, device, batch, loss_func)
-                preds = torch.cat(preds).view(-1, len(preds))
-
-                for pred in preds:
-                    # idx list -> word list
-                    sentence = []
-                    for token in pred:
-                        token = token.item()
-                        if token == PAD_TOKEN_ID:
-                            break
-                        sentence.append(id2word[token].strip())
-                    predictions.append(sentence)
-
-                for tgt_seq in tgt_seqs:
-                    sentence = []
-                    for token in tgt_seq:
-                        token = token.item()
-                        if token == PAD_TOKEN_ID:
-                            break
-                        sentence.append(id2word[token].strip())
-                    target_sequences.append(sentence)
-
-                losses.append(loss)
-                tqdm_iterator.set_postfix_str(f'loss: {loss:05.3f}')
-
-        bleu_score = nltk.translate.bleu_score.corpus_bleu(target_sequences, predictions)
-        print(f'BLEU score: {bleu_score}')
-
-    avg_loss = np.mean(losses)
-    print(f'EVAL avg losses: {avg_loss:05.3f}')
-
-    return avg_loss
+def pad_token(sentence, max_len, pad_value=PAD_TOKEN_ID):
+    """Append padding to one sentence"""
+    pad_size = max_len - len(sentence)
+    for _ in range(pad_size):
+        sentence.append(pad_value)
 
 
 def main():
     check_params(eval_params)
-    device = get_device()
-    print(f'  Available device is {device}')
+    device = 'cpu'
 
     src_tokenizer = eval_params.src_tokenizer()
     tgt_tokenizer = eval_params.tgt_tokenizer()
@@ -148,8 +96,6 @@ def main():
                                                 eval_params.src_word_embedding_filename)
     tgt_word_embedding_file_path = os.path.join(dataset_dir,
                                                 eval_params.tgt_word_embedding_filename)
-    src_corpus_file_path = os.path.join(dataset_dir, eval_params.src_corpus_filename)
-    tgt_corpus_file_path = os.path.join(dataset_dir, eval_params.tgt_corpus_filename)
 
     src_word2id, src_id2word, src_embedding = check_vocab_embedding(
         src_vocab_file_path,
@@ -163,39 +109,49 @@ def main():
     encoder_params.vocab_size = len(src_word2id)
     encoder_params.device = device
     encoder = eval_params.encoder(encoder_params)
-    # encoder.init_embedding_weight(src_embedding)
 
     decoder_params.vocab_size = len(tgt_word2id)
     decoder_params.device = device
     decoder = eval_params.decoder(decoder_params)
-    # decoder.init_embedding_weight(tgt_embedding)
 
     model: nn.Module = Seq2Seq(encoder, decoder)
-    loss_func = nn.CrossEntropyLoss()
 
     checkpoint = torch.load(os.path.join(base_dir, checkpoint_path))
     model.load_state_dict(checkpoint['model_state_dict'])
-    model.to(device)
+    model.eval()
 
-    dataset = ParallelTextDataSet(
-        src_tokenizer,
-        tgt_tokenizer,
-        src_corpus_file_path,
-        tgt_corpus_file_path,
-        encoder_params.max_seq_len,
-        decoder_params.max_seq_len,
-        src_word2id,
-        tgt_word2id
-    )
-    data_loader = DataLoader(dataset,
-                             eval_params.batch_size,
-                             collate_fn=dataset.collate_func)
+    src_max_length = encoder_params.max_seq_len
+    src_seqs = '저장된 검색어가 없습니다.'
+    print(f'Input sequence: {src_seqs}')
+    with torch.no_grad():
+        src_tokenized = src_tokenizer.tokenize(src_seqs)
+        print(src_tokenized)
 
-    # avg_loss, bleu_score = eval_model(model, loss_func, data_loader, device, tgt_id2word)
-    avg_loss = eval_model(model, loss_func, data_loader, device, tgt_id2word)
+        temp_tokenized = []
+        for word in src_tokenized:
+            if word in src_word2id:
+                temp_tokenized.append(src_word2id[word])
+            else:
+                temp_tokenized.append(UNK_TOKEN_ID)
+        src_tokenized = temp_tokenized
+
+        pad_token(src_tokenized, src_max_length)
+        print(src_tokenized)
+
+        src_padded_tokens = torch.tensor(src_tokenized, dtype=torch.long, device=device).unsqueeze(
+            0)
+        src_length = torch.tensor(len(src_tokenized)).unsqueeze(0)
+        logits, preds = model(src_padded_tokens, src_length, None, None)
+
+        sentence = []
+        for token in preds:
+            token = token.item()
+            if token == PAD_TOKEN_ID:
+                break
+            sentence.append(tgt_id2word[token].strip())
+        print(sentence)
+        print(len(sentence))
 
 
 if __name__ == '__main__':
-    print('***** Eval start *****')
     main()
-    print('***** Eval end *****')
