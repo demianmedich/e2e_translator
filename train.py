@@ -13,48 +13,17 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import ParallelTextData
-from module import GruEncoder, GruDecoder
 from module import Seq2Seq
 from module.embedding import make_fasttext_embedding_vocab_weight
-from module.preprocess import MecabTokenizer
-from module.preprocess import NltkTokenizer
+from module.tokenizer import MecabTokenizer
+from module.tokenizer import NltkTokenizer
+from params import decoder_params
+from params import encoder_params
+from params import train_params
 from util import AttributeDict
 from util import get_checkpoint_dir_path
 from util import get_device
 from util import train_step
-
-train_params = AttributeDict({
-    "n_epochs": 1,
-    "batch_size": 64,
-    "learning_rate": 1e-4,
-    "src_tokenizer": NltkTokenizer,
-    "tgt_tokenizer": NltkTokenizer,
-    "src_vocab_filename": "src_vocab.txt",
-    "src_word_embedding_filename": "src_word_embedding.npy",
-    "tgt_vocab_filename": "tgt_vocab.txt",
-    "tgt_word_embedding_filename": "tgt_word_embedding.npy",
-    "src_corpus_filename": "korean-english-park.dev.ko",
-    "tgt_corpus_filename": "korean-english-park.dev.en",
-    "model_save_directory": "kor2eng-gru-gru"
-})
-
-encoder_params = AttributeDict({
-    "embedding_dim": 100,
-    "hidden_size": 256,
-    "num_layers": 2,
-    "dropout_prob": 0.3,
-    "bidirectional": True,
-    "max_seq_len": 100,
-})
-
-decoder_params = AttributeDict({
-    "embedding_dim": 100,
-    "hidden_size": 256,
-    "num_layers": 2,
-    "dropout_prob": 0.3,
-    "max_seq_len": 100,
-    "beam_size": 3,
-})
 
 
 def check_params(config: AttributeDict):
@@ -197,13 +166,13 @@ def main():
 
     encoder_params.vocab_size = len(src_word2id)
     encoder_params.device = device
-    encoder = GruEncoder(encoder_params)
+    encoder = train_params.encoder(encoder_params)
     # Freeze word embedding weight
     encoder.init_embedding_weight(src_embed_matrix)
 
     decoder_params.vocab_size = len(tgt_word2id)
     decoder_params.device = device
-    decoder = GruDecoder(decoder_params)
+    decoder = train_params.decoder(decoder_params)
     # Freeze word embedding weight
     decoder.init_embedding_weight(tgt_embed_matrix)
 

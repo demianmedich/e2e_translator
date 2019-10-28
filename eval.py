@@ -8,8 +8,8 @@ import numpy as np
 import torch
 
 from util import AttributeDict
-from module.preprocess import NltkTokenizer
-from module.preprocess import MecabTokenizer
+from module.tokenizer import NltkTokenizer
+from module.tokenizer import MecabTokenizer
 
 eval_params = AttributeDict({
     "src_tokenizer": NltkTokenizer,

@@ -7,6 +7,6 @@ from __future__ import unicode_literals
 from .base_model import Seq2Seq
 from .embedding import FastTextEmbedding
 from .embedding import WordEmbedding
-from .preprocess import MecabTokenizer
-from .preprocess import Tokenizer
+from .tokenizer import MecabTokenizer
+from .tokenizer import Tokenizer
 from .rnn_base import GruEncoder, GruDecoder
