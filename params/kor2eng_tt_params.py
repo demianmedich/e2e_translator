@@ -44,7 +44,7 @@ common_params = AttributeDict({
 })
 
 train_params = AttributeDict({
-    "n_epochs": 1,
+    "n_epochs": 10,
     "batch_size": 32,
     "learning_rate": 1e-4,
     "src_corpus_filename": "korean-english-park.train.ko",

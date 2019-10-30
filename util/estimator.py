@@ -266,7 +266,7 @@ class Estimator:
                     for tgt_seq in tgt_seqs:
                         target_sequences.append(index2word(tgt_id2word, tgt_seq))
 
-                    losses.append(loss)
+                    losses.append(loss.item())
                     tqdm_iterator.set_postfix_str(f'loss: {loss:05.3f}')
             bleu_score = nltk.translate.bleu_score.corpus_bleu(target_sequences,
                                                                predicted_sentences)
