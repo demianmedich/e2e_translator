@@ -9,15 +9,15 @@ import math
 import numpy as np
 import torch
 from torch import nn
-from torch.nn.init import kaiming_uniform_
+from torch.nn.init import xavier_uniform_
 from torch.nn.modules.transformer import TransformerDecoder as _TransformerDecoder
 from torch.nn.modules.transformer import TransformerDecoderLayer
 from torch.nn.modules.transformer import TransformerEncoder as _TransformerEncoder
 from torch.nn.modules.transformer import TransformerEncoderLayer
 
 from util import AttributeDict
-from util.tokens import SOS_TOKEN_ID
 from util.tokens import PAD_TOKEN_ID
+from util.tokens import SOS_TOKEN_ID
 
 
 class PositionalEncoding(nn.Module):
@@ -116,7 +116,7 @@ class TransformerEncoder(nn.Module):
         """
         for param in self.parameters():
             if param.dim() > 1:
-                kaiming_uniform_(param)
+                xavier_uniform_(param)
 
 
 class TransformerDecoder(nn.Module):
@@ -187,6 +187,7 @@ class TransformerDecoder(nn.Module):
         # transpose batch first
         output = self.linear_transform(output)
         output = torch.transpose(output, 0, 1)
+        output = nn.functional.softmax(output, dim=-1)
         return output
 
     def forward(self,
@@ -242,4 +243,4 @@ class TransformerDecoder(nn.Module):
         """
         for param in self.parameters():
             if param.dim() > 1:
-                kaiming_uniform_(param)
+                xavier_uniform_(param)

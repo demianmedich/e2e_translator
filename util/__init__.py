@@ -6,6 +6,7 @@ from __future__ import unicode_literals
 
 from .util import AttributeDict
 from .util import get_checkpoint_dir_path
+from .util import get_checkpoint_filename
 from .util import get_device
 from .util import pad_token
 from .util import index2word

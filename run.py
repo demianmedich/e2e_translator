@@ -45,7 +45,13 @@ def main():
     device = get_device()
     estimator = Estimator(device, common_params)
     loss_func = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_ID)
-    optimizer = torch.optim.Adam(estimator.get_model_parameters(), train_params.learning_rate)
+
+    if train_params.optimizer is torch.optim.Adam:
+        betas = train_params.get('betas', (0.9, 0.999))
+        eps = train_params.get('eps', 1e-8)
+        optimizer = torch.optim.Adam(estimator.get_model_parameters(), train_params.learning_rate)
+    else:
+        optimizer = train_params.optimizer(train_params.learning_rate)
 
     if args.mode == 'train':
         estimator.train(train_params, loss_func, optimizer)

@@ -18,9 +18,11 @@ from dataset import ParallelTextDataSet
 from module import Seq2Seq
 from util import AttributeDict
 from util import get_checkpoint_dir_path
+from util import get_checkpoint_filename
 from util import index2word
 from util import pad_token
 from util.tokens import UNK_TOKEN_ID
+from nltk.translate.bleu_score import SmoothingFunction
 
 
 class Estimator:
@@ -72,6 +74,11 @@ class Estimator:
             decoder_params.vocab_size = len(self.tgt_word2id)
 
         self.model: nn.Module = self._build_model(self.common_params, self.device)
+        if self.src_word_embedding_file_path is not None:
+            self.model.encoder.init_embedding_weight(np.load(self.src_word_embedding_file_path))
+        if self.tgt_word_embedding_file_path is not None:
+            self.model.decoder.init_embedding_weight(np.load(self.tgt_word_embedding_file_path))
+        self.model.to(device)
 
     def get_model_parameters(self):
         return self.model.parameters()
@@ -84,7 +91,7 @@ class Estimator:
             decoder_params = params.decoder_params
             encoder = encoder_params.model(encoder_params)
             decoder = decoder_params.model(decoder_params)
-            model = params.model(encoder, decoder).to(device)
+            model = params.model(encoder, decoder)
         else:
             raise AssertionError('Not implemented.. T^T')
         return model
@@ -112,7 +119,7 @@ class Estimator:
                                          self.device, epoch + 1)
 
         save_dir_path = os.path.join(train_params.model_save_directory,
-                                     get_checkpoint_dir_path(epoch + 1))
+                                     get_checkpoint_filename(epoch + 1))
         if not os.path.exists(save_dir_path):
             os.makedirs(save_dir_path)
 
@@ -268,8 +275,11 @@ class Estimator:
 
                     losses.append(loss.item())
                     tqdm_iterator.set_postfix_str(f'loss: {loss:05.3f}')
+
+            smoother = SmoothingFunction()
             bleu_score = nltk.translate.bleu_score.corpus_bleu(target_sequences,
-                                                               predicted_sentences)
+                                                               predicted_sentences,
+                                                               smoothing_function=smoother.method1)
             return np.mean(losses), bleu_score
 
     @staticmethod

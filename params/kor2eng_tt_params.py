@@ -8,6 +8,7 @@ from module import TransformerEncoder, TransformerDecoder
 from module.tokenizer import NltkTokenizer, MecabTokenizer
 from util import AttributeDict
 from module import Seq2Seq
+from torch.optim import Adam
 
 common_params = AttributeDict({
     "model": Seq2Seq,
@@ -27,7 +28,7 @@ common_params = AttributeDict({
         "pe_dropout_prob": 0.1,
         "dropout_prob": 0.1,
         "activation": "relu",
-        "max_seq_len": 128,
+        "max_seq_len": 64,
     },
     "decoder_params": {
         "model": TransformerDecoder,
@@ -39,14 +40,17 @@ common_params = AttributeDict({
         "pe_dropout_prob": 0.1,
         "dropout_prob": 0.1,
         "activation": "relu",
-        "max_seq_len": 128,
+        "max_seq_len": 64,
     }
 })
 
 train_params = AttributeDict({
-    "n_epochs": 10,
+    "n_epochs": 5,
     "batch_size": 32,
-    "learning_rate": 1e-4,
+    "learning_rate": 0.2,
+    "optimizer": Adam,
+    "betas": (0.9, 0.98),
+    "eps": 1e-9,
     "src_corpus_filename": "korean-english-park.train.ko",
     "tgt_corpus_filename": "korean-english-park.train.en",
     "model_save_directory": "kor2eng-trans-trans"
@@ -56,5 +60,5 @@ eval_params = AttributeDict({
     "batch_size": 128,
     "src_corpus_filename": "korean-english-park.test.ko",
     "tgt_corpus_filename": "korean-english-park.test.en",
-    "checkpoint_path": "kor2eng-trans-trans/2019-10-30-14-23-41-epoch_001/checkpoint.tar"
+    "checkpoint_path": "kor2eng-trans-trans/ckpt-19-10-30-21-13-23-epoch-010.tar"
 })
