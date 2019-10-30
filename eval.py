@@ -1,4 +1,5 @@
 # coding: utf-8
+# DEPRECATED!!!!!
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -17,13 +18,14 @@ from dataset import ParallelTextDataSet
 from module import Seq2Seq
 from module.tokenizer import MecabTokenizer
 from module.tokenizer import NltkTokenizer
-from params import decoder_params
-from params import encoder_params
-from params import eval_params
+from params.params import decoder_params
+from params.params import encoder_params
+from params.params import eval_params
 from util import AttributeDict
 from util import eval_step
 from util import get_device
 from util.tokens import PAD_TOKEN_ID
+from util import index2word
 
 
 def check_params(config: AttributeDict):
@@ -96,38 +98,22 @@ def eval_model(model: nn.Module,
                 _, _, tgt_seqs, tgt_lengths = batch
 
                 # TODO: PAD 고려??
-                loss, logits, preds = eval_step(model, device, batch, loss_func)
-                preds = torch.cat(preds).view(-1, len(preds))
+                loss, logits, predicted_sentences = eval_step(model, device, batch, loss_func)
+                # preds = torch.cat(preds).view(-1, len(preds))
 
-                for pred in preds:
-                    # idx list -> word list
-                    sentence = []
-                    for token in pred:
-                        token = token.item()
-                        if token == PAD_TOKEN_ID:
-                            break
-                        sentence.append(id2word[token].strip())
-                    predictions.append(sentence)
+                for predicted_sentence in predicted_sentences:
+                    predictions.append(index2word(id2word, predicted_sentence))
 
                 for tgt_seq in tgt_seqs:
-                    sentence = []
-                    for token in tgt_seq:
-                        token = token.item()
-                        if token == PAD_TOKEN_ID:
-                            break
-                        sentence.append(id2word[token].strip())
-                    target_sequences.append(sentence)
+                    target_sequences.append(index2word(id2word, tgt_seq))
 
                 losses.append(loss)
                 tqdm_iterator.set_postfix_str(f'loss: {loss:05.3f}')
 
         bleu_score = nltk.translate.bleu_score.corpus_bleu(target_sequences, predictions)
-        print(f'BLEU score: {bleu_score}')
 
     avg_loss = np.mean(losses)
-    print(f'EVAL avg losses: {avg_loss:05.3f}')
-
-    return avg_loss
+    return avg_loss, bleu_score
 
 
 def main():
@@ -192,7 +178,7 @@ def main():
                              collate_fn=dataset.collate_func)
 
     # avg_loss, bleu_score = eval_model(model, loss_func, data_loader, device, tgt_id2word)
-    avg_loss = eval_model(model, loss_func, data_loader, device, tgt_id2word)
+    avg_loss, bleu_score = eval_model(model, loss_func, data_loader, device, tgt_id2word)
 
 
 if __name__ == '__main__':

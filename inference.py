@@ -1,4 +1,5 @@
 # coding: utf-8
+# DEPRECATED!!!!!
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -13,9 +14,9 @@ from torch import nn
 from module import Seq2Seq
 from module.tokenizer import MecabTokenizer
 from module.tokenizer import NltkTokenizer
-from params import decoder_params
-from params import encoder_params
-from params import eval_params
+from params.params import decoder_params
+from params.params import encoder_params
+from params.params import eval_params
 from util import AttributeDict
 from util.tokens import PAD_TOKEN_ID
 from util.tokens import UNK_TOKEN_ID
@@ -141,10 +142,12 @@ def main():
         src_padded_tokens = torch.tensor(src_tokenized, dtype=torch.long, device=device).unsqueeze(
             0)
         src_length = torch.tensor(len(src_tokenized)).unsqueeze(0)
-        logits, preds = model(src_padded_tokens, src_length, None, None)
+        logits = model(src_padded_tokens, src_length, None, None)
+        _, indices = torch.max(logits.detach().cpu(), dim=-1, keepdim=True)
+        predictions = indices.squeeze(-1)
 
         sentence = []
-        for token in preds:
+        for token in predictions:
             token = token.item()
             if token == PAD_TOKEN_ID:
                 break

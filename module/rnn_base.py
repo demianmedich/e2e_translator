@@ -103,7 +103,6 @@ class GruDecoder(nn.Module):
         decoder_input = initial_input
         prev_hidden_state = encoder_hidden_state
 
-        predictions = []
         for t in range(self.max_seq_len):
             decoder_output, hidden_state = self.step(t, decoder_input, prev_hidden_state)
             logits[t] = decoder_output
@@ -115,13 +114,12 @@ class GruDecoder(nn.Module):
                 # Greedy search
                 top_value, top_index = decoder_output.data.topk(1)
                 decoder_input = top_index.squeeze(-1).detach()
-                predictions.append(decoder_input.cpu())
 
             decoder_input = decoder_input.long().unsqueeze(-1)
             prev_hidden_state = hidden_state
 
         logits = logits.transpose(0, 1)
-        return logits, predictions
+        return logits
 
     def step(self, t, inputs, prev_hidden_state):
         embedding = self.embedding_lookup(inputs)

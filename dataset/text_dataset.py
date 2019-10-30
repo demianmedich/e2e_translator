@@ -7,6 +7,7 @@ from __future__ import unicode_literals
 import torch
 from torch.utils import data
 
+from util.tokens import SOS_TOKEN
 from util.tokens import EOS_TOKEN
 from util.tokens import PAD_TOKEN
 from util.tokens import SPECIAL_TOKENS
@@ -51,8 +52,10 @@ class ParallelTextDataSet(data.Dataset):
         src, tgt = self.pair_sentences[index]
         src_tokens = []
         tgt_tokens = []
+        tokenized_src = self.src_tokenizer.tokenize(src)
+        src_tokens.append(self.src_word2id[SOS_TOKEN])
         for i, token in enumerate(self.src_tokenizer.tokenize(src)):
-            if i == self.src_max_length:
+            if i == self.src_max_length - 2:
                 break
             if token in self.src_word2id:
                 src_tokens.append(self.src_word2id[token])
@@ -60,8 +63,9 @@ class ParallelTextDataSet(data.Dataset):
                 src_tokens.append(self.src_word2id[UNK_TOKEN])
         src_tokens.append(self.src_word2id[EOS_TOKEN])
 
+        tgt_tokens.append(self.src_word2id[SOS_TOKEN])
         for i, token in enumerate(self.tgt_tokenizer.tokenize(tgt)):
-            if i == self.tgt_max_length:
+            if i == self.tgt_max_length - 2:
                 break
             if token in self.tgt_word2id:
                 tgt_tokens.append(self.tgt_word2id[token])

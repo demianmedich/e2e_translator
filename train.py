@@ -1,4 +1,5 @@
 # coding: utf-8
+# DEPRECATED!!!!!
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -17,13 +18,14 @@ from module import Seq2Seq
 from module.embedding import make_fasttext_embedding_vocab_weight
 from module.tokenizer import MecabTokenizer
 from module.tokenizer import NltkTokenizer
-from params import decoder_params
-from params import encoder_params
-from params import train_params
+from params.params import decoder_params
+from params.params import encoder_params
+from params.params import train_params
 from util import AttributeDict
 from util import get_checkpoint_dir_path
 from util import get_device
 from util import train_step
+from util.tokens import PAD_TOKEN_ID
 
 
 def check_params(config: AttributeDict):
@@ -114,7 +116,7 @@ def train_model(model: nn.Module,
             tqdm_iterator.set_postfix_str(f'loss: {loss:05.3f}')
 
     avg_loss = np.mean(losses)
-    print(f'Epochs [{epoch}/{n_epochs}] avg losses: {avg_loss:05.3f}')
+    print(f'Epochs [{epoch}/{n_epochs}] avg losses: {avg_loss:05.3f}', flush=True)
     return avg_loss
 
 
@@ -122,6 +124,7 @@ def main():
     check_params(train_params)
 
     device = get_device()
+    # device = 'cpu'
     print(f'  Available device is {device}')
 
     src_tokenizer = train_params.src_tokenizer()
@@ -183,7 +186,7 @@ def main():
     model: nn.Module = Seq2Seq(encoder, decoder)
     model.to(device)
 
-    loss_func = nn.CrossEntropyLoss()
+    loss_func = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_ID)
     optimizer = torch.optim.Adam(model.parameters(), lr=train_params.learning_rate)
 
     epoch = 0

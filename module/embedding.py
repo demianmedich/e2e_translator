@@ -45,9 +45,15 @@ class Word2VecEmbedding(WordEmbedding):
         super().__init__()
 
         if sentences is not None:
-            self._impl = Word2Vec(sg=int(is_skip_gram), size=dim, sentences=sentences)
+            self._impl = Word2Vec(sg=int(is_skip_gram), size=dim)
+            self._impl.build_vocab(sentences=sentences)
+            self._impl.train(sentences=sentences, total_words=self._impl.corpus_total_words,
+                             epochs=10)
         elif corpus_file_path is not None:
-            self._impl = Word2Vec(sg=int(is_skip_gram), size=dim, corpus_file=corpus_file_path)
+            self._impl = Word2Vec(sg=int(is_skip_gram), size=dim)
+            self._impl.build_vocab(corpus_file=corpus_file_path)
+            self._impl.train(sentences=sentences, total_words=self._impl.corpus_total_words,
+                             epochs=10)
         elif saved_model_path is not None:
             # load from saved FastText embedding file
             self._impl = KeyedVectors.load_word2vec_format(saved_model_path)
@@ -84,9 +90,15 @@ class FastTextEmbedding(WordEmbedding):
         super().__init__()
 
         if sentences is not None:
-            self._impl = FastText(size=dim, sentences=sentences)
+            self._impl = FastText(size=dim)
+            self._impl.build_vocab(sentences=sentences)
+            self._impl.train(sentences=sentences, total_words=self._impl.corpus_total_words,
+                             epochs=10)
         elif corpus_file_path is not None:
-            self._impl = FastText(size=dim, corpus_file=corpus_file_path)
+            self._impl = FastText(size=dim)
+            self._impl.build_vocab(corpus_file=corpus_file_path)
+            self._impl.train(corpus_file=corpus_file_path,
+                             total_words=self._impl.corpus_total_words, epochs=10)
         elif saved_model_path is not None:
             # load from saved FastText embedding file
             self._impl = load_facebook_model(saved_model_path)
@@ -115,19 +127,31 @@ def make_word2vec_embedding_vocab_weight(
         corpus_file_path: str,
         vocab_path: str,
         weight_path: str,
-        embedding_dim):
+        embedding_dim,
+        is_skip_gram=True,
+):
     if os.path.exists(vocab_path):
         os.remove(vocab_path)
-    if os.path.exists(weight_path):
+    if weight_path is not None and os.path.exists(weight_path):
         os.remove(weight_path)
 
-    sentences = tokenizer.tokenize_from_file(corpus_file_path=corpus_file_path)
-    embedding = Word2VecEmbedding(sentences=sentences, dim=embedding_dim)
+    if tokenizer is not None:
+        sentences = tokenizer.tokenize_from_file(corpus_file_path=corpus_file_path)
+        embedding = Word2VecEmbedding(is_skip_gram=is_skip_gram, sentences=sentences,
+                                      dim=embedding_dim)
+    else:
+        embedding = Word2VecEmbedding(is_skip_gram=is_skip_gram, corpus_file_path=corpus_file_path,
+                                      dim=embedding_dim)
+
     vocab = [f'{token}\n' for token in embedding.vocab]
     with open(vocab_path, mode='w', encoding='utf-8') as f:
         for token in SPECIAL_TOKENS:
             f.write(token + '\n')
         f.writelines(vocab)
+
+    if weight_path is None:
+        return embedding
+
     matrix = embedding.get_embedding_matrix()
     for index, token in enumerate(SPECIAL_TOKENS):
         matrix = np.insert(matrix, index, np.random.randn(embedding_dim), axis=0)
@@ -143,11 +167,14 @@ def make_fasttext_embedding_vocab_weight(
         embedding_dim):
     if os.path.exists(vocab_path):
         os.remove(vocab_path)
-    if os.path.exists(weight_path):
+    if weight_path is not None and os.path.exists(weight_path):
         os.remove(weight_path)
 
-    sentences = tokenizer.tokenize_from_file(corpus_file_path=corpus_file_path)
-    embedding = FastTextEmbedding(sentences=sentences, dim=embedding_dim)
+    if tokenizer is not None:
+        sentences = tokenizer.tokenize_from_file(corpus_file_path=corpus_file_path)
+        embedding = FastTextEmbedding(sentences=sentences, dim=embedding_dim)
+    else:
+        embedding = FastTextEmbedding(corpus_file_path=corpus_file_path, dim=embedding_dim)
     vocab = [f'{token}\n' for token in embedding.vocab]
     vocab_size_with_special_tokens = embedding.vocab_size + len(SPECIAL_TOKENS)
 
@@ -155,6 +182,10 @@ def make_fasttext_embedding_vocab_weight(
         for token in SPECIAL_TOKENS:
             f.write(token + '\n')
         f.writelines(vocab)
+
+    if weight_path is None:
+        return embedding
+
     matrix = embedding.get_embedding_matrix()
     for index, token in enumerate(SPECIAL_TOKENS):
         matrix = np.insert(matrix, index, np.random.randn(embedding_dim), axis=0)
