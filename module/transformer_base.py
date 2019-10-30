@@ -16,6 +16,7 @@ from torch.nn.modules.transformer import TransformerEncoder as _TransformerEncod
 from torch.nn.modules.transformer import TransformerEncoderLayer
 
 from util import AttributeDict
+from util.tokens import SOS_TOKEN_ID
 from util.tokens import PAD_TOKEN_ID
 
 
@@ -104,10 +105,9 @@ class TransformerEncoder(nn.Module):
                                                         src_key_padding_mask=src_key_padding_mask)
 
     def init_embedding_weight(self, embedding_weight: np.ndarray):
-        pass
         # Learning from model
-        # self.embedding.weight = nn.Parameter(torch.from_numpy(embedding_weight),
-        #                                      requires_grad=False)
+        self.embedding.weight = nn.Parameter(torch.from_numpy(embedding_weight),
+                                             requires_grad=False)
 
     def _init_parameter(self):
         """
@@ -157,11 +157,10 @@ class TransformerDecoder(nn.Module):
         self.linear_transform = nn.Linear(self.d_model, self.vocab_size)
         self._init_parameter()
 
-    def forward(self,
-                src_key_padding_mask: torch.Tensor,
-                enc_outputs: torch.Tensor,
-                tgt_seqs: torch.Tensor,
-                tgt_lengths: torch.Tensor):
+    def _decode_step(self,
+                     src_key_padding_mask: torch.Tensor,
+                     enc_outputs: torch.Tensor,
+                     tgt_seqs: torch.Tensor):
         # tgt_key_padding_mask: (batch_size, tgt_seq_length)
         # This makes output as NaN... why????????????
         # tgt_key_padding_mask = tgt_seqs == PAD_TOKEN_ID
@@ -190,11 +189,34 @@ class TransformerDecoder(nn.Module):
         output = torch.transpose(output, 0, 1)
         return output
 
+    def forward(self,
+                src_key_padding_mask: torch.Tensor,
+                enc_outputs: torch.Tensor,
+                tgt_seqs: torch.Tensor,
+                tgt_lengths: torch.Tensor):
+        if self.training:
+            output = self._decode_step(src_key_padding_mask, enc_outputs, tgt_seqs)
+        else:
+            # evaluation or inference
+            output = None
+            batch_size = enc_outputs.size(1)
+            # decoder_input = batch_size * [SOS_TOKEN_ID]
+            # decoder_input = torch.tensor(decoder_input, dtype=torch.long, device=self.device)
+            # decoder_input = decoder_input.unsqueeze(-1)
+            # logits = torch.zeros(batch_size, self.max_seq_len, self.vocab_size, device=self.device)
+            ys = torch.ones(batch_size, 1, dtype=torch.long, device=self.device).fill_(SOS_TOKEN_ID)
+            for i in range(self.max_seq_len):
+                output = self._decode_step(src_key_padding_mask, enc_outputs, ys)
+                step_output = output[:, -1]
+                _, top_index = step_output.data.topk(1)
+                ys = torch.cat([ys, top_index], dim=1)
+
+        return output
+
     def init_embedding_weight(self, embedding_weight: np.ndarray):
-        pass
         # Learning from model
-        # self.embedding.weight = nn.Parameter(torch.from_numpy(embedding_weight),
-        #                                      requires_grad=False)
+        self.embedding.weight = nn.Parameter(torch.from_numpy(embedding_weight),
+                                             requires_grad=False)
 
     def _generate_square_subsequent_mask(self, size):
         """

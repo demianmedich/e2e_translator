@@ -7,18 +7,20 @@ from __future__ import unicode_literals
 import os
 from enum import Enum
 
+import nltk
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import nltk
 
 from dataset import ParallelTextDataSet
 from module import Seq2Seq
 from util import AttributeDict
 from util import get_checkpoint_dir_path
 from util import index2word
+from util import pad_token
+from util.tokens import UNK_TOKEN_ID
 
 
 class Estimator:
@@ -175,10 +177,10 @@ class Estimator:
         # N is batch * seq_len, C is number of classes. (vocab size)
         # logits : (N by C)
         # labels : (N)
-        logits = logits.contiguous().view(-1, logits.size(-1))
+        logits_flattened = logits.contiguous().view(-1, logits.size(-1))
         labels = tgt_seqs.contiguous().view(-1)
         indices_except_padding = [labels != 0]
-        loss = loss_func(logits[indices_except_padding], labels[indices_except_padding])
+        loss = loss_func(logits_flattened[indices_except_padding], labels[indices_except_padding])
         return logits, loss
 
     @staticmethod
@@ -205,12 +207,22 @@ class Estimator:
                                  collate_fn=data_set.collate_func)
         return data_loader
 
+    def _load_checkpoint(self, params: AttributeDict):
+        return torch.load(os.path.join(self.base_dir, params.checkpoint_path))
+
+    def _load_checkpoint_from_path(self, checkpoint_path: str):
+        return torch.load(os.path.join(self.base_dir, checkpoint_path))
+
     def eval(self, eval_params: AttributeDict, loss_func):
         self._set_mode(Estimator.Mode.EVAL)
-        params = self.common_params.copy()
+        params = AttributeDict(self.common_params.copy())
         params.update(eval_params)
         encoder_params = params.encoder_params
         decoder_params = params.decoder_params
+
+        # load checkpoint
+        checkpoint = self._load_checkpoint(params)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
 
         src_corpus_file_path = os.path.join(self.data_set_dir, params.src_corpus_filename)
         tgt_corpus_file_path = os.path.join(self.data_set_dir, params.tgt_corpus_filename)
@@ -261,15 +273,45 @@ class Estimator:
             return np.mean(losses), bleu_score
 
     @staticmethod
-    def change_prediction_tensor(self, logits: torch.Tensor):
+    def change_prediction_tensor(logits: torch.Tensor):
         _, indices = torch.max(logits.detach().cpu(), dim=-1, keepdim=True)
         predictions = indices.squeeze(-1)
         return predictions
 
-    def inference(self, inputs):
+    def inference(self, inputs: str, eval_params: AttributeDict):
         self._set_mode(Estimator.Mode.INFERENCE)
-        # TODO: 문장 또는 문장 전체가 들어올 경우도 고려.
-        pass
+        # self.device = 'cpu'
+        # self.model.to(self.device)
+
+        # load checkpoint
+        checkpoint = self._load_checkpoint(eval_params)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+
+        src_max_len = self.common_params.encoder_params.max_seq_len
+        src_tokens = self.src_tokenizer.tokenize(inputs)
+        src_lengths = len(src_tokens)
+
+        for i, token in enumerate(src_tokens):
+            if token in self.src_word2id:
+                src_tokens[i] = self.src_word2id[token]
+            else:
+                src_tokens[i] = UNK_TOKEN_ID
+
+        pad_token(src_tokens, src_max_len)
+        print(f'src padded tokens: {src_tokens}')
+
+        with torch.no_grad():
+            src_padded_tokens = torch.tensor(src_tokens, device=self.device)
+            src_padded_tokens = src_padded_tokens.unsqueeze(0)
+            src_lengths = torch.tensor(src_lengths).unsqueeze(0)
+
+            logits = self._forward_step(self.model, src_padded_tokens, src_lengths, None, None)
+            _, indices = torch.max(logits, dim=-1, keepdim=True)
+            predictions = indices.squeeze(-1).squeeze(0)
+
+            print(f'predicted tokens: {predictions.tolist()}')
+            sentence = index2word(self.tgt_id2word, predictions)
+            print(f'predicted sentence: {sentence}')
 
     def _set_mode(self, mode: Mode):
         self.mode = mode

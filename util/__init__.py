@@ -5,9 +5,8 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from .util import AttributeDict
-from .util import eval_step
 from .util import get_checkpoint_dir_path
 from .util import get_device
-from .util import train_step
+from .util import pad_token
 from .util import index2word
 from .estimator import Estimator

@@ -21,6 +21,7 @@ def parse_args():
     parser.add_argument('--params', required=True, type=str,
                         help='Search params from <project_root>/params/')
     parser.add_argument('--mode', required=True, type=str, help='One of [train, eval, inference]')
+    parser.add_argument('--input', required=False, type=str, help='Inference input')
     return parser.parse_args()
 
 
@@ -50,6 +51,9 @@ def main():
         estimator.train(train_params, loss_func, optimizer)
     elif args.mode == 'eval':
         estimator.eval(eval_params, loss_func)
+    else:
+        assert args.input is not None, '--input required on inference mode.'
+        estimator.inference(args.input, eval_params)
 
 
 if __name__ == '__main__':
