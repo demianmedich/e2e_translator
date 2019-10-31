@@ -47,10 +47,10 @@ common_params = AttributeDict({
 train_params = AttributeDict({
     "n_epochs": 3,
     "batch_size": 32,
-    "learning_rate": 0.2,
+    "learning_rate": 1e-4,
     "optimizer": Adam,
-    # "betas": (0.9, 0.98),
-    # "eps": 1e-9,
+    "betas": (0.9, 0.98),
+    "eps": 1e-9,
     "src_corpus_filename": "korean-english-park.train.ko",
     "tgt_corpus_filename": "korean-english-park.train.en",
     "src_valid_corpus_filename": "korean-english-park.valid.ko",
@@ -62,5 +62,5 @@ eval_params = AttributeDict({
     "batch_size": 128,
     "src_corpus_filename": "korean-english-park.test.ko",
     "tgt_corpus_filename": "korean-english-park.test.en",
-    "checkpoint_path": "kor2eng-trans-trans/ckpt-19-10-30-21-13-23-epoch-010.tar"
+    "checkpoint_path": "kor2eng-trans-trans/ckpt-19-10-31-14-35-23-epoch-003/checkpoint.tar"
 })

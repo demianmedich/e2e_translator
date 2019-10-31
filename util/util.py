@@ -32,7 +32,7 @@ def get_checkpoint_dir_path(epoch: int) -> str:
 
 def get_checkpoint_filename(epoch: int) -> str:
     date_fmt = datetime.today().strftime('%y-%m-%d-%H-%M-%S')
-    return f'ckpt-{date_fmt}-epoch-{epoch:03d}'
+    return f'ckpt-{date_fmt}-epoch-{epoch:03d}.tar'
 
 
 def pad_token(tokens, max_len, pad_value=PAD_TOKEN_ID):

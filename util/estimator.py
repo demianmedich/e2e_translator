@@ -22,6 +22,7 @@ from util import get_checkpoint_filename
 from util import index2word
 from util import pad_token
 from util.tokens import UNK_TOKEN_ID
+from util.tokens import PAD_TOKEN_ID
 from nltk.translate.bleu_score import SmoothingFunction
 
 
@@ -128,8 +129,8 @@ class Estimator:
 
         save_dir_path = os.path.join(train_params.model_save_directory,
                                      get_checkpoint_filename(epoch + 1))
-        if not os.path.exists(save_dir_path):
-            os.makedirs(save_dir_path)
+        if os.path.exists(save_dir_path):
+            os.remove(save_dir_path)
 
         # save checkpoint for last epoch
         torch.save({
@@ -137,7 +138,7 @@ class Estimator:
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'loss': avg_loss
-        }, os.path.join(save_dir_path, 'checkpoint.tar'))
+        }, save_dir_path)
 
     @staticmethod
     def _train_model(data_loader: DataLoader,
@@ -194,8 +195,9 @@ class Estimator:
         # labels : (N)
         logits_flattened = logits.contiguous().view(-1, logits.size(-1))
         labels = tgt_seqs.contiguous().view(-1)
-        indices_except_padding = [labels != 0]
-        loss = loss_func(logits_flattened[indices_except_padding], labels[indices_except_padding])
+        loss = loss_func(logits_flattened, labels)
+        # indices_except_padding = [labels != PAD_TOKEN_ID]
+        # loss = loss_func(logits_flattened[indices_except_padding], labels[indices_except_padding])
         return logits, loss
 
     @staticmethod

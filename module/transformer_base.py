@@ -181,13 +181,13 @@ class TransformerDecoder(nn.Module):
                                     memory=enc_outputs,
                                     tgt_mask=tgt_mask,
                                     # tgt_key_padding_mask=tgt_key_padding_mask,
-                                    memory_key_padding_mask=memory_key_padding_mask)
+                                    memory_key_padding_mask=memory_key_padding_mask,
+                                    )
 
         # output: (tgt_seq_len, batch_size, output_vocab_size)
         # transpose batch first
         output = self.linear_transform(output)
         output = torch.transpose(output, 0, 1)
-        output = nn.functional.softmax(output, dim=-1)
         return output
 
     def forward(self,
