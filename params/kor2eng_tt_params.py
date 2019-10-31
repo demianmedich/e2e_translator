@@ -4,16 +4,17 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+from torch.optim import Adam
+
+from module import Seq2Seq
 from module import TransformerEncoder, TransformerDecoder
 from module.tokenizer import NltkTokenizer, MecabTokenizer
 from util import AttributeDict
-from module import Seq2Seq
-from torch.optim import Adam
 
 common_params = AttributeDict({
     "model": Seq2Seq,
     "src_tokenizer": MecabTokenizer,
-    "tgt_tokenizer": MecabTokenizer,
+    "tgt_tokenizer": NltkTokenizer,
     "src_vocab_filename": "kor-mecab-fasttext",
     "tgt_vocab_filename": "eng-nltk-fasttext",
     "src_word_embedding_filename": "kor-mecab-fasttext-512d.npy",
@@ -45,7 +46,7 @@ common_params = AttributeDict({
 })
 
 train_params = AttributeDict({
-    "n_epochs": 3,
+    "n_epochs": 1,
     "batch_size": 32,
     "learning_rate": 1e-4,
     "optimizer": Adam,
@@ -62,5 +63,5 @@ eval_params = AttributeDict({
     "batch_size": 128,
     "src_corpus_filename": "korean-english-park.test.ko",
     "tgt_corpus_filename": "korean-english-park.test.en",
-    "checkpoint_path": "kor2eng-trans-trans/ckpt-19-10-31-14-35-23-epoch-003/checkpoint.tar"
+    "checkpoint_path": "kor2eng-trans-trans/ckpt-19-10-31-16-27-35-epoch-001.tar"
 })

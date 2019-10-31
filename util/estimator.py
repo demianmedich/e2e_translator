@@ -195,9 +195,9 @@ class Estimator:
         # labels : (N)
         logits_flattened = logits.contiguous().view(-1, logits.size(-1))
         labels = tgt_seqs.contiguous().view(-1)
-        loss = loss_func(logits_flattened, labels)
-        # indices_except_padding = [labels != PAD_TOKEN_ID]
-        # loss = loss_func(logits_flattened[indices_except_padding], labels[indices_except_padding])
+        # loss = loss_func(logits_flattened, labels)
+        indices_except_padding = [labels != PAD_TOKEN_ID]
+        loss = loss_func(logits_flattened[indices_except_padding], labels[indices_except_padding])
         return logits, loss
 
     @staticmethod

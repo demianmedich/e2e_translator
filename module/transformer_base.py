@@ -21,25 +21,23 @@ from util.tokens import SOS_TOKEN_ID
 
 
 class PositionalEncoding(nn.Module):
-    """
-    Positional encoding
-    https://pytorch.org/tutorials/beginner/transformer_tutorial.html#define-the-model
-    """
+    """Implement the PE function."""
 
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
+    def __init__(self, d_model, dropout, max_len=5000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
+        # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        position = torch.arange(0, max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * -(math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
+        pe = pe.unsqueeze(0)
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
+        x = x + self.pe[:, :x.size(1)]
         return self.dropout(x)
 
 
@@ -75,8 +73,8 @@ class TransformerEncoder(nn.Module):
             dropout=self.dropout_prob,
             activation=self.activation)
         # encoder will be cloned as much as num_layers
-        norm = nn.LayerNorm(self.d_model)
-        self.encoder_stack = _TransformerEncoder(encoder, self.num_layers, norm)
+        self.norm = nn.LayerNorm(self.d_model)
+        self.encoder_stack = _TransformerEncoder(encoder, self.num_layers, self.norm)
         self._init_parameter()
 
     def forward(self, src_seqs: torch.Tensor, src_lengths: torch.Tensor):
@@ -91,6 +89,7 @@ class TransformerEncoder(nn.Module):
         src_key_padding_mask = src_seqs == PAD_TOKEN_ID
 
         embedding = self.embedding(src_seqs)
+        # embedding = embedding * math.sqrt(self.d_model)
         embedding = self.positional_encoding(embedding)
         # embedding: (batch_size, source_seq_len, embedding_dim)
 
@@ -151,9 +150,9 @@ class TransformerDecoder(nn.Module):
             dropout=self.dropout_prob,
             activation=self.activation
         )
-        norm = nn.LayerNorm(self.d_model)
+        self.norm = nn.LayerNorm(self.d_model)
         # encoder will be cloned as much as num_layers
-        self.decoder_stack = _TransformerDecoder(decoder_layer, self.num_layers, norm)
+        self.decoder_stack = _TransformerDecoder(decoder_layer, self.num_layers, self.norm)
         self.linear_transform = nn.Linear(self.d_model, self.vocab_size)
         self._init_parameter()
 
@@ -163,7 +162,7 @@ class TransformerDecoder(nn.Module):
                      tgt_seqs: torch.Tensor):
         # tgt_key_padding_mask: (batch_size, tgt_seq_length)
         # This makes output as NaN... why????????????
-        # tgt_key_padding_mask = tgt_seqs == PAD_TOKEN_ID
+        tgt_key_padding_mask = tgt_seqs == PAD_TOKEN_ID
 
         # memory_key_padding_mask: (batch_size, src_seq_length)
         memory_key_padding_mask = src_key_padding_mask
@@ -173,6 +172,7 @@ class TransformerDecoder(nn.Module):
 
         # required embedding shape: (tgt_seq_len, batch_size, embedding_dim)
         embedding = self.embedding(tgt_seqs)
+        # embedding = embedding * math.sqrt(self.d_model)
         embedding = self.positional_encoding(embedding)
         embedding = torch.transpose(embedding, 0, 1)
 
@@ -180,7 +180,7 @@ class TransformerDecoder(nn.Module):
         output = self.decoder_stack(tgt=embedding,
                                     memory=enc_outputs,
                                     tgt_mask=tgt_mask,
-                                    # tgt_key_padding_mask=tgt_key_padding_mask,
+                                    tgt_key_padding_mask=tgt_key_padding_mask,
                                     memory_key_padding_mask=memory_key_padding_mask,
                                     )
 
@@ -198,7 +198,7 @@ class TransformerDecoder(nn.Module):
         if self.training:
             output = self._decode_step(src_key_padding_mask, enc_outputs, tgt_seqs)
         else:
-            # evaluation or inference
+            # inference
             output = None
             batch_size = enc_outputs.size(1)
             ys = torch.ones(batch_size, 1, dtype=torch.long, device=self.device).fill_(SOS_TOKEN_ID)
