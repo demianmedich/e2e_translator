@@ -53,9 +53,9 @@ class ParallelTextDataSet(data.Dataset):
         src_tokens = []
         tgt_tokens = []
         tokenized_src = self.src_tokenizer.tokenize(src)
-        src_tokens.append(self.src_word2id[SOS_TOKEN])
+        # src_tokens.append(self.src_word2id[SOS_TOKEN])
         for i, token in enumerate(self.src_tokenizer.tokenize(src)):
-            if i == self.src_max_length - 2:
+            if i == self.src_max_length - 1:
                 break
             if token in self.src_word2id:
                 src_tokens.append(self.src_word2id[token])
@@ -63,9 +63,9 @@ class ParallelTextDataSet(data.Dataset):
                 src_tokens.append(self.src_word2id[UNK_TOKEN])
         src_tokens.append(self.src_word2id[EOS_TOKEN])
 
-        tgt_tokens.append(self.src_word2id[SOS_TOKEN])
+        # tgt_tokens.append(self.src_word2id[SOS_TOKEN])
         for i, token in enumerate(self.tgt_tokenizer.tokenize(tgt)):
-            if i == self.tgt_max_length - 2:
+            if i == self.tgt_max_length - 1:
                 break
             if token in self.tgt_word2id:
                 tgt_tokens.append(self.tgt_word2id[token])

@@ -63,5 +63,5 @@ eval_params = AttributeDict({
     "batch_size": 128,
     "src_corpus_filename": "korean-english-park.test.ko",
     "tgt_corpus_filename": "korean-english-park.test.en",
-    "checkpoint_path": "kor2eng-trans-trans/ckpt-19-10-31-16-27-35-epoch-001.tar"
+    "checkpoint_path": "kor2eng-trans-trans/ckpt-19-10-31-19-24-27-epoch-001.tar"
 })

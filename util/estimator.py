@@ -11,19 +11,19 @@ import nltk
 import numpy as np
 import torch
 import torch.nn as nn
+from nltk.translate.bleu_score import SmoothingFunction
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import ParallelTextDataSet
 from module import Seq2Seq
 from util import AttributeDict
-from util import get_checkpoint_dir_path
 from util import get_checkpoint_filename
 from util import index2word
 from util import pad_token
-from util.tokens import UNK_TOKEN_ID
-from util.tokens import PAD_TOKEN_ID
-from nltk.translate.bleu_score import SmoothingFunction
+from util.tokens import EOS_TOKEN
+from util.tokens import PAD_TOKEN
+from util.tokens import UNK_TOKEN
 
 
 class Estimator:
@@ -140,8 +140,8 @@ class Estimator:
             'loss': avg_loss
         }, save_dir_path)
 
-    @staticmethod
-    def _train_model(data_loader: DataLoader,
+    def _train_model(self,
+                     data_loader: DataLoader,
                      params: AttributeDict,
                      model: nn.Module,
                      loss_func,
@@ -161,8 +161,8 @@ class Estimator:
                 tgt_seqs = tgt_seqs.to(device)
                 tgt_lengths = tgt_lengths.to(device)
 
-                _, loss = Estimator._train_step(model, src_seqs, src_lengths, tgt_seqs, tgt_lengths,
-                                                loss_func, optimizer)
+                _, loss = self._train_step(model, src_seqs, src_lengths, tgt_seqs, tgt_lengths,
+                                           loss_func, optimizer)
                 losses.append(loss)
                 tqdm_iterator.set_postfix_str(f'loss: {loss:05.3f}')
 
@@ -170,8 +170,8 @@ class Estimator:
         print(f'Epochs [{epoch}/{n_epochs}] avg losses: {avg_loss:05.3f}', flush=True)
         return avg_loss
 
-    @staticmethod
-    def _forward_step(model: nn.Module,
+    def _forward_step(self,
+                      model: nn.Module,
                       src_seqs: torch.Tensor,
                       src_lengths: torch.Tensor,
                       tgt_seqs: torch.Tensor,
@@ -179,37 +179,38 @@ class Estimator:
         logits = model(src_seqs, src_lengths, tgt_seqs, tgt_lengths)
         return logits
 
-    @staticmethod
-    def _loss_step(model: nn.Module,
+    def _loss_step(self,
+                   model: nn.Module,
                    src_seqs: torch.Tensor,
                    src_lengths: torch.Tensor,
                    tgt_seqs: torch.Tensor,
                    tgt_lengths: torch.Tensor,
                    loss_func):
-
-        logits = Estimator._forward_step(model, src_seqs, src_lengths, tgt_seqs, tgt_lengths)
+        tgt_seqs_input = tgt_seqs[:, :-1]
+        tgt_seqs_ = tgt_seqs[:, 1:]
+        logits = self._forward_step(model, src_seqs, src_lengths, tgt_seqs_input, tgt_lengths)
 
         # To calculate loss, we should change shape of logits and labels
         # N is batch * seq_len, C is number of classes. (vocab size)
         # logits : (N by C)
         # labels : (N)
         logits_flattened = logits.contiguous().view(-1, logits.size(-1))
-        labels = tgt_seqs.contiguous().view(-1)
-        # loss = loss_func(logits_flattened, labels)
-        indices_except_padding = [labels != PAD_TOKEN_ID]
-        loss = loss_func(logits_flattened[indices_except_padding], labels[indices_except_padding])
+        labels = tgt_seqs_.contiguous().view(-1)
+        loss = loss_func(logits_flattened, labels)
+        # indices_except_padding = [labels != self.src_word2id[PAD_TOKEN]]
+        # loss = loss_func(logits_flattened[indices_except_padding], labels[indices_except_padding])
         return logits, loss
 
-    @staticmethod
-    def _train_step(model: nn.Module,
+    def _train_step(self,
+                    model: nn.Module,
                     src_seqs: torch.Tensor,
                     src_lengths: torch.Tensor,
                     tgt_seqs: torch.Tensor,
                     tgt_lengths: torch.Tensor,
                     loss_func,
                     optimizer):
-        logits, loss = Estimator._loss_step(model, src_seqs, src_lengths, tgt_seqs, tgt_lengths,
-                                            loss_func)
+        logits, loss = self._loss_step(model, src_seqs, src_lengths, tgt_seqs, tgt_lengths,
+                                       loss_func)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -251,9 +252,8 @@ class Estimator:
                                                 self.device, self.tgt_id2word)
         print(f'Avg loss: {avg_loss:05.3f}, BLEU score: {bleu_score}')
 
-    @staticmethod
-    def _eval_model(data_loader: DataLoader,
-                    params: AttributeDict,
+    def _eval_model(self,
+                    data_loader: DataLoader,
                     model: nn.Module,
                     loss_func,
                     device: str,
@@ -273,8 +273,8 @@ class Estimator:
                     tgt_seqs = tgt_seqs.to(device)
                     tgt_lengths = tgt_lengths.to(device)
 
-                    logits, loss = Estimator._loss_step(model, src_seqs, src_lengths, tgt_seqs,
-                                                        tgt_lengths, loss_func)
+                    logits, loss = self._loss_step(model, src_seqs, src_lengths, tgt_seqs,
+                                                   tgt_lengths, loss_func)
                     predictions = Estimator.change_prediction_tensor(logits)
 
                     for predicted_sentence in predictions:
@@ -312,10 +312,13 @@ class Estimator:
         src_lengths = len(src_tokens)
 
         for i, token in enumerate(src_tokens):
+            if i == src_max_len - 1:
+                break
             if token in self.src_word2id:
                 src_tokens[i] = self.src_word2id[token]
             else:
-                src_tokens[i] = UNK_TOKEN_ID
+                src_tokens[i] = self.src_word2id[UNK_TOKEN]
+        src_tokens.append(self.src_word2id[EOS_TOKEN])
 
         pad_token(src_tokens, src_max_len)
         print(f'src padded tokens: {src_tokens}')

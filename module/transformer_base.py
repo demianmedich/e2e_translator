@@ -73,8 +73,8 @@ class TransformerEncoder(nn.Module):
             dropout=self.dropout_prob,
             activation=self.activation)
         # encoder will be cloned as much as num_layers
-        self.norm = nn.LayerNorm(self.d_model)
-        self.encoder_stack = _TransformerEncoder(encoder, self.num_layers, self.norm)
+        # self.norm = nn.LayerNorm(self.d_model)
+        self.encoder_stack = _TransformerEncoder(encoder, self.num_layers)
         self._init_parameter()
 
     def forward(self, src_seqs: torch.Tensor, src_lengths: torch.Tensor):
@@ -180,7 +180,7 @@ class TransformerDecoder(nn.Module):
         output = self.decoder_stack(tgt=embedding,
                                     memory=enc_outputs,
                                     tgt_mask=tgt_mask,
-                                    tgt_key_padding_mask=tgt_key_padding_mask,
+                                    # tgt_key_padding_mask=tgt_key_padding_mask,
                                     memory_key_padding_mask=memory_key_padding_mask,
                                     )
 
@@ -196,19 +196,19 @@ class TransformerDecoder(nn.Module):
                 tgt_seqs: torch.Tensor,
                 tgt_lengths: torch.Tensor):
         if self.training:
-            output = self._decode_step(src_key_padding_mask, enc_outputs, tgt_seqs)
+            logits = self._decode_step(src_key_padding_mask, enc_outputs, tgt_seqs)
         else:
             # inference
-            output = None
+            logits = None
             batch_size = enc_outputs.size(1)
             ys = torch.ones(batch_size, 1, dtype=torch.long, device=self.device).fill_(SOS_TOKEN_ID)
             for i in range(self.max_seq_len):
-                output = self._decode_step(src_key_padding_mask, enc_outputs, ys)
-                step_output = output[:, -1]
+                logits = self._decode_step(src_key_padding_mask, enc_outputs, ys)
+                step_output = logits[:, -1]
                 _, top_index = step_output.data.topk(1)
                 ys = torch.cat([ys, top_index], dim=1)
 
-        return output
+        return logits
 
     def init_embedding_weight(self, embedding_weight: np.ndarray):
         # Learning from model
