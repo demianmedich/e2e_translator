@@ -52,12 +52,20 @@ class Estimator:
 
         self.src_vocab_file_path = os.path.join(self.data_set_dir, common_params.src_vocab_filename)
         self.tgt_vocab_file_path = os.path.join(self.data_set_dir, common_params.tgt_vocab_filename)
-        self.src_word_embedding_file_path = os.path.join(self.data_set_dir,
-                                                         common_params.get(
-                                                             'src_word_embedding_filename', None))
-        self.tgt_word_embedding_file_path = os.path.join(self.data_set_dir,
-                                                         common_params.get(
-                                                             'tgt_word_embedding_filename', None))
+
+        src_word_embedding_filename = common_params.get('src_word_embedding_filename', None)
+        if src_word_embedding_filename is not None:
+            self.src_word_embedding_file_path = os.path.join(self.data_set_dir,
+                                                             src_word_embedding_filename)
+        else:
+            self.src_word_embedding_file_path = None
+
+        tgt_word_embedding_filename = common_params.get('tgt_word_embedding_filename', None)
+        if tgt_word_embedding_filename is not None:
+            self.tgt_word_embedding_file_path = os.path.join(self.data_set_dir,
+                                                             tgt_word_embedding_filename)
+        else:
+            self.tgt_word_embedding_file_path = None
 
         self.src_word2id, self.src_id2word, self.src_embedding_weight = self._build_vocab(
             self.src_vocab_file_path,
@@ -362,29 +370,5 @@ class Estimator:
 
         assert len(invalid_indices) == 0, \
             f'You have untrusted vocabulary file. check indices {invalid_indices}'
-
-        # if len(invalid_indices) > 0:
-        # vocab_words = [f'{token}\n' for token in word2id.keys()]
-        # with open(vocab_file_path, mode='w', encoding='utf-8') as wf:
-        #     wf.writelines(vocab_words)
-        # word2id.clear()
-        # id2word.clear()
-        # print(f'Now, this vocab has no invalid token')
-        # with open(vocab_file_path, mode='r', encoding='utf-8') as f:
-        #     tokens = f.readlines()
-        # for index, token in enumerate(tokens):
-        #     stripped_token = token.lstrip().rstrip()
-        #     if len(stripped_token) == 0:
-        #         continue
-        #     word2id[token] = index
-        #     id2word[index] = token
-
-        # print(f'  dic count: {len(word2id)}')
-        # if len(invalid_indices) > 0 and embedding_matrix is not None:
-        #     embedding_matrix = np.delete(embedding_matrix, invalid_indices, axis=0)
-        #     assert len(word2id) == embedding_matrix.shape[0], \
-        #         'This should not be happened. check estimator logic.'
-        #     os.remove(word_embedding_file_path)
-        #     np.save(word_embedding_file_path, embedding_matrix)
 
         return word2id, id2word, embedding_matrix

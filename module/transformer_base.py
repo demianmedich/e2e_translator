@@ -201,10 +201,6 @@ class TransformerDecoder(nn.Module):
             # evaluation or inference
             output = None
             batch_size = enc_outputs.size(1)
-            # decoder_input = batch_size * [SOS_TOKEN_ID]
-            # decoder_input = torch.tensor(decoder_input, dtype=torch.long, device=self.device)
-            # decoder_input = decoder_input.unsqueeze(-1)
-            # logits = torch.zeros(batch_size, self.max_seq_len, self.vocab_size, device=self.device)
             ys = torch.ones(batch_size, 1, dtype=torch.long, device=self.device).fill_(SOS_TOKEN_ID)
             for i in range(self.max_seq_len):
                 output = self._decode_step(src_key_padding_mask, enc_outputs, ys)

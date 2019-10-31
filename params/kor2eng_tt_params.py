@@ -15,9 +15,9 @@ common_params = AttributeDict({
     "src_tokenizer": MecabTokenizer,
     "tgt_tokenizer": MecabTokenizer,
     "src_vocab_filename": "kor-mecab-fasttext",
-    "tgt_vocab_filename": "eng-mecab-fasttext",
+    "tgt_vocab_filename": "eng-nltk-fasttext",
     "src_word_embedding_filename": "kor-mecab-fasttext-512d.npy",
-    "tgt_word_embedding_filename": "eng-mecab-fasttext-512d.npy",
+    "tgt_word_embedding_filename": "eng-nltk-fasttext-512d.npy",
     "encoder_params": {
         "model": TransformerEncoder,
         "embedding_dim": 512,
@@ -45,14 +45,16 @@ common_params = AttributeDict({
 })
 
 train_params = AttributeDict({
-    "n_epochs": 5,
+    "n_epochs": 3,
     "batch_size": 32,
     "learning_rate": 0.2,
     "optimizer": Adam,
-    "betas": (0.9, 0.98),
-    "eps": 1e-9,
+    # "betas": (0.9, 0.98),
+    # "eps": 1e-9,
     "src_corpus_filename": "korean-english-park.train.ko",
     "tgt_corpus_filename": "korean-english-park.train.en",
+    "src_valid_corpus_filename": "korean-english-park.valid.ko",
+    "tgt_valid_corpus_filename": "korean-english-park.valid.en",
     "model_save_directory": "kor2eng-trans-trans"
 })
 
