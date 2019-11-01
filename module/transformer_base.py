@@ -183,6 +183,7 @@ class TransformerDecoder(nn.Module):
                                     # tgt_key_padding_mask=tgt_key_padding_mask,
                                     memory_key_padding_mask=memory_key_padding_mask,
                                     )
+        # output[output != output] = 0
 
         # output: (tgt_seq_len, batch_size, output_vocab_size)
         # transpose batch first
@@ -202,9 +203,9 @@ class TransformerDecoder(nn.Module):
             logits = None
             batch_size = enc_outputs.size(1)
             ys = torch.ones(batch_size, 1, dtype=torch.long, device=self.device).fill_(SOS_TOKEN_ID)
-            for i in range(self.max_seq_len):
+            for i in range(self.max_seq_len - 1):
                 logits = self._decode_step(src_key_padding_mask, enc_outputs, ys)
-                step_output = logits[:, -1]
+                step_output = logits[:, -1].detach()
                 _, top_index = step_output.data.topk(1)
                 ys = torch.cat([ys, top_index], dim=1)
 
